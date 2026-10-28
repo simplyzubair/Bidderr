@@ -22,6 +22,15 @@ Add-Type -Namespace E2E -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT rect);
 [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+[StructLayout(LayoutKind.Sequential)] public struct KEYINPUT { public uint type; public uint pad1; public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public ulong extra; public ulong pad2; }
+[DllImport("user32.dll")] private static extern uint SendInput(uint n, KEYINPUT[] inputs, int size);
+[DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
+// Like a real keyboard: hardware scan code (Chrome ignores key events without one).
+public static uint SendKey(byte vk, bool up) {
+  var k = new KEYINPUT { type = 1, wScan = (ushort)MapVirtualKey(vk, 0), dwFlags = 0x0008u | (up ? 0x0002u : 0u) };
+  if (vk == 0x23) k.dwFlags |= 0x0001u; // End is an extended key
+  return SendInput(1, new[] { k }, Marshal.SizeOf(typeof(KEYINPUT)));
+}
 public static bool ClickTextArea(IntPtr h) {
   RECT r;
   if (!GetWindowRect(h, out r)) return false;
@@ -34,7 +43,7 @@ public static bool ClickTextArea(IntPtr h) {
 }
 '@
 
-function Key([byte]$vk, [bool]$up) { [E2E.Win]::keybd_event($vk, 0, $(if ($up) { 2 } else { 0 }), [UIntPtr]::Zero) }
+function Key([byte]$vk, [bool]$up) { [E2E.Win]::SendKey($vk, $up) | Out-Null }
 
 # Like a person: hold Ctrl and Shift, tap 1, let go.
 function Press-Hotkey {
@@ -46,17 +55,9 @@ function Press-Hotkey {
 }
 
 function Press-Keys([byte[]]$mods, [byte]$vk) {
-  $prefix = ''
-  if ($mods -contains 0x11) { $prefix += '^' }
-  if ($mods -contains 0x10) { $prefix += '+' }
-  if ($mods -contains 0x12) { $prefix += '%' }
-  $key = switch ($vk) {
-    0x23 { '{END}' }
-    0x41 { 'a' }
-    0x43 { 'c' }
-    default { throw "Unsupported test key: $vk" }
-  }
-  [System.Windows.Forms.SendKeys]::SendWait("$prefix$key")
+  foreach ($m in $mods) { Key $m $false; Start-Sleep -Milliseconds 30 }
+  Key $vk $false; Start-Sleep -Milliseconds 30; Key $vk $true
+  for ($i = $mods.Count - 1; $i -ge 0; $i--) { Start-Sleep -Milliseconds 30; Key $mods[$i] $true }
   Start-Sleep -Milliseconds 150
 }
 

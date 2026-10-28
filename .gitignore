@@ -11,3 +11,6 @@ android/app/build/
 android/local.properties
 *.keystore
 *.jks
+
+# Downloaded CI test results
+artifacts/
