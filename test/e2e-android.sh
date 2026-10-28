@@ -4,9 +4,17 @@
 # Both must open Bidderr with the job text. With no API key the app must say so clearly.
 # Screenshots and UI dumps go to $OUT.
 set -uo pipefail
-# The emulator runner can hang while waiting for its Crashpad child processes to exit.
-# Stop them when the test script exits so the action can finish its emulator teardown.
-trap 'pkill -TERM -x crashpad_handler 2>/dev/null || true; sleep 2; pkill -KILL -x crashpad_handler 2>/dev/null || true' EXIT
+# Shut down the emulator before the action's own cleanup; adb emu kill can hang on this image.
+# The job runner is isolated to this single emulator, so stop any remaining emulator children too.
+cleanup_emulator() {
+  timeout 5s adb -s emulator-5554 emu kill >/dev/null 2>&1 || true
+  pkill -TERM -x qemu-system-x86_64 2>/dev/null || true
+  pkill -TERM -x crashpad_handler 2>/dev/null || true
+  sleep 2
+  pkill -KILL -x qemu-system-x86_64 2>/dev/null || true
+  pkill -KILL -x crashpad_handler 2>/dev/null || true
+}
+trap cleanup_emulator EXIT
 # Prevent a wedged adb shell/uiautomator call from holding the CI job open.
 adb() { command timeout 20s adb "$@"; }
 APK="${1:-Bidderr.apk}"
