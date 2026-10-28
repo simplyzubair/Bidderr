@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Bidderr</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <h1>Bid<span>derr</span></h1>
+  <p class="tagline">Copy a job. Press a key. Paste a winning proposal.</p>
+
+  <div class="card">
+    <h2>How to use</h2>
+    <ol>
+      <li>Select the job posting and copy it (<kbd>Ctrl</kbd>+<kbd>C</kbd>).</li>
+      <li>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> and wait a few seconds.</li>
+      <li>Paste the proposal (<kbd>Ctrl</kbd>+<kbd>V</kbd>).</li>
+    </ol>
+    <p id="hotkey-warning" class="status error hidden">Ctrl+Shift+1 is taken by another app. Use the button below or the tray menu.</p>
+  </div>
+
+  <div class="card">
+    <h2>Free Google API key</h2>
+    <p id="key-state" class="status"></p>
+    <p>Get one free at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> and paste it here.</p>
+    <div class="row">
+      <input id="key" type="password" placeholder="Paste your API key" autocomplete="off">
+      <button id="save" class="primary fixed">Save</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <button id="write" class="big">Write proposal from clipboard</button>
+    <p id="status" class="status"></p>
+    <textarea id="last" readonly placeholder="Your last proposal shows here."></textarea>
+  </div>
+
+  <details class="card">
+    <summary><strong>Edit prompt (admin)</strong></summary>
+    <p class="tagline">This is what the AI is told to do. Change it any time, then press Save.</p>
+    <textarea id="prompt" class="tall" spellcheck="true"></textarea>
+    <div class="row">
+      <button id="save-prompt" class="primary">Save prompt</button>
+      <button id="reset-prompt">Reset to default</button>
+    </div>
+    <p id="prompt-status" class="status"></p>
+  </details>
+
+  <script src="settings.js"></script>
+</body>
+</html>

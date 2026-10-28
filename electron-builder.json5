@@ -1,19 +1,22 @@
 {
-  "appId": "com.closer.ai",
-  "productName": "Closer AI",
+  "appId": "com.bidderr.app",
+  "productName": "Bidderr",
   "directories": {
     "output": "release"
   },
   "files": [
-    "dist/**/*",
-    "electron/**/*"
+    "electron/**/*",
+    "shared/**/*",
+    "public/icon.png"
   ],
   "win": {
-    "target": [
-      {
-        "target": "dir",
-        "arch": ["x64"]
-      }
-    ]
+    "icon": "public/icon.png",
+    "target": [{ "target": "nsis", "arch": ["x64"] }]
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "runAfterFinish": true,
+    "artifactName": "Bidderr-Setup.exe"
   }
 }

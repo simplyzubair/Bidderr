@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://generativelanguage.googleapis.com">
+  <title>Bidderr</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Bid<span>derr</span></h1>
+  <p class="tagline">Copy a job. Tap once. Paste a winning proposal.</p>
+
+  <div id="key-card" class="card">
+    <h2>Free Google API key</h2>
+    <p id="key-state" class="status"></p>
+    <p>Get one free at <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> and paste it here.</p>
+    <div class="row">
+      <input id="key" type="password" placeholder="Paste your API key" autocomplete="off">
+      <button id="save-key" class="primary fixed">Save</button>
+    </div>
+  </div>
+
+  <button id="paste-write" class="primary big">Paste job &amp; write proposal</button>
+  <p id="status" class="status"></p>
+
+  <div class="card">
+    <h2>Proposal</h2>
+    <textarea id="result" placeholder="Your proposal shows here. It is copied for you automatically."></textarea>
+    <div class="row">
+      <button id="copy" class="primary">Copy</button>
+      <button id="again">Write again</button>
+    </div>
+  </div>
+
+  <details class="card">
+    <summary><strong>Job posting</strong></summary>
+    <textarea id="job" placeholder="The job text shows here. You can also type or paste it yourself."></textarea>
+    <div class="row"><button id="write">Write proposal from this text</button></div>
+  </details>
+
+  <details class="card">
+    <summary><strong>Edit prompt (admin)</strong></summary>
+    <p class="tagline">This is what the AI is told to do. Change it any time, then press Save.</p>
+    <textarea id="prompt" class="tall"></textarea>
+    <div class="row">
+      <button id="save-prompt" class="primary">Save prompt</button>
+      <button id="reset-prompt">Reset to default</button>
+    </div>
+    <p id="prompt-status" class="status"></p>
+  </details>
+
+  <details class="card">
+    <summary><strong>Tips</strong></summary>
+    <ol>
+      <li>In Chrome or the Upwork app, select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share → Bidderr</strong>).</li>
+      <li>The proposal is copied for you. Go back and paste it.</li>
+      <li>To change your API key, open this app and tap <strong>Change API key</strong> below.</li>
+    </ol>
+    <div class="row"><button id="change-key">Change API key</button></div>
+  </details>
+
+  <script src="proposal.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

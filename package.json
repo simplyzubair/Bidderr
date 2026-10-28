@@ -1,31 +1,18 @@
 {
-  "name": "closer-ai",
-  "version": "1.0.0",
-  "description": "Custom AI Desktop Assistant for instant client messaging, proposal bidding, and smart clipboard automation.",
+  "name": "bidderr",
+  "version": "2.0.0",
+  "description": "Bidderr: copy a job posting, press Ctrl+Shift+1, paste a ready proposal.",
   "main": "electron/main.js",
-  "author": "Closer AI Team",
+  "author": "Khan",
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently \"vite\" \"cross-env NODE_ENV=development electron .\"",
-    "build:react": "vite build",
-    "build:exe": "npm run build:react && electron-builder",
-    "preview": "vite preview",
-    "build:extension": "node scripts/buildExtension.js",
-    "test": "node --test test/*.test.mjs"
-  },
-  "dependencies": {
-    "lucide-react": "^0.344.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "icon": "node scripts/makeIcon.js",
+    "build:exe": "electron-builder --win"
   },
   "devDependencies": {
-    "@types/react": "^18.2.64",
-    "@types/react-dom": "^18.2.21",
-    "@vitejs/plugin-react": "^4.2.1",
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
     "electron": "^29.1.5",
-    "electron-builder": "^24.13.3",
-    "vite": "^5.1.6"
+    "electron-builder": "^24.13.3"
   }
 }
