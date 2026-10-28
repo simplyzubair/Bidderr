@@ -75,6 +75,15 @@ jobs:
       - run: npm ci
       - shell: bash
         run: npx electron-builder --win --publish never "-c.extraMetadata.version=${{ needs.version.outputs.version }}"
+      - name: Smoke test the packaged app
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $p = Start-Process release\win-unpacked\Bidderr.exe -ArgumentList "--smoke-test=$out" -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'Packaged app did not finish its smoke test' }
+          $r = Get-Content $out | ConvertFrom-Json
+          Write-Host "packaged app: version $($r.version), hotkey registered $($r.hotkeyOk)"
+          if (-not $r.hotkeyOk) { throw 'Packaged app could not register Ctrl+Shift+1' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -83,8 +92,54 @@ jobs:
             release/Bidderr-Setup.exe.blockmap
             release/latest.yml
 
+  # Real desktop test: select a job in Notepad and Chrome, press Ctrl+Shift+1, check the clipboard.
+  e2e-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - shell: pwsh
+        run: ./test/e2e-windows.ps1
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-windows
+          path: ${{ runner.temp }}/bidderr-e2e/*.png
+
+  # Real emulator test: share a job, tap the bubble over Chrome.
+  e2e-android:
+    needs: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: OUT=e2e-android bash test/e2e-android.sh Bidderr.apk
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-android
+          path: e2e-android/
+
   release:
-    needs: [version, android, windows]
+    needs: [version, android, windows, e2e-windows, e2e-android]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

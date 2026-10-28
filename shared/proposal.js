@@ -81,8 +81,10 @@ OUTPUT RULES:
       .trim();
   }
 
-  async function callGemini(model, apiKey, prompt, jobText, fetchImpl) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const GOOGLE_API = 'https://generativelanguage.googleapis.com';
+
+  async function callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase) {
+    const url = `${apiBase}/v1beta/models/${model}:generateContent`;
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
@@ -106,7 +108,7 @@ OUTPUT RULES:
   // Errors where trying the next model can help: model not found, out of quota, overloaded.
   const RETRY_NEXT_MODEL = new Set([404, 429, 500, 503]);
 
-  async function generateProposal(jobText, apiKey, { prompt, fetchImpl = fetch, models = MODELS } = {}) {
+  async function generateProposal(jobText, apiKey, { prompt, fetchImpl = fetch, models = MODELS, apiBase = GOOGLE_API } = {}) {
     const job = String(jobText || '').trim();
     if (!apiKey) throw new Error('No API key yet. Open Settings and paste your free Google key.');
     if (job.length < 30) throw new Error('Copy the job posting first (the clipboard text is too short).');
@@ -114,7 +116,7 @@ OUTPUT RULES:
     let lastError;
     for (const model of models) {
       try {
-        return formatProposal(await callGemini(model, apiKey, (prompt || '').trim() || DEFAULT_PROMPT, job.slice(0, 15000), fetchImpl));
+        return formatProposal(await callGemini(model, apiKey, (prompt || '').trim() || DEFAULT_PROMPT, job.slice(0, 15000), fetchImpl, apiBase));
       } catch (e) {
         lastError = e;
         if (!RETRY_NEXT_MODEL.has(e.status)) break;
@@ -130,11 +132,11 @@ OUTPUT RULES:
   }
 
   // Asks Google if the key works (a free call that lists models). Returns 'ok', 'invalid' or 'offline'.
-  async function checkApiKey(apiKey, { fetchImpl = fetch } = {}) {
+  async function checkApiKey(apiKey, { fetchImpl = fetch, apiBase = GOOGLE_API } = {}) {
     const key = String(apiKey || '').trim();
     if (!key) return 'invalid';
     try {
-      const res = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+      const res = await fetchImpl(`${apiBase}/v1beta/models?pageSize=1`, {
         headers: { 'x-goog-api-key': key },
       });
       if (res.ok) return 'ok';

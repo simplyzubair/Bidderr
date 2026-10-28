@@ -92,6 +92,7 @@ async function write(jobText) {
 // Called by MainActivity when text comes from the bubble, "Write proposal" or Share.
 // From the bubble, go straight back to the job page once the proposal is copied.
 window.onJobText = async (text, fromBubble) => {
+  $('job-card').open = true; // show what was read, so the user can check it
   const ok = await write(text);
   if (ok && fromBubble && window.Android) setTimeout(() => window.Android.backToJob(), 700);
 };

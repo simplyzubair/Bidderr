@@ -8,8 +8,13 @@
     "electron/**/*",
     "shared/**/*",
     "branding/logo.svg",
-    "public/*.png"
+    "public/*.png",
+    // koffi ships builds for every OS; the installer only needs 64-bit Windows.
+    "!node_modules/koffi/build/koffi/{darwin_*,freebsd_*,linux_*,musl_*,openbsd_*,win32_arm64,win32_ia32}/**",
+    "!node_modules/koffi/{src,doc,vendor}/**"
   ],
+  // Native Windows helper (koffi) must sit outside the app archive to load.
+  "asarUnpack": ["node_modules/koffi/build/koffi/win32_x64/**"],
   // Where installed apps look for updates (electron-updater).
   "publish": [{ "provider": "github", "owner": "simplyzubair", "repo": "Bidderr" }],
   "win": {

@@ -1,72 +1,52 @@
-// Copies whatever text is selected in the app the user is looking at, so the hotkey works
-// without pressing Ctrl+C first. A PowerShell helper stays running in the background
-// (compiling its Win32 code once), so each copy only takes a few milliseconds.
-const { spawn } = require('child_process');
+// Copies the text selected in the app the user is looking at, so the hotkey works without
+// pressing Ctrl+C first. Talks to Windows directly (user32.dll through koffi): no PowerShell,
+// and the user's clipboard is never emptied.
 const { clipboard } = require('electron');
+const koffi = require('koffi');
 
-const HELPER = `
-Add-Type -Namespace Bidderr -Name Keys -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);'
-function Key($vk, $up) { [Bidderr.Keys]::keybd_event($vk, 0, $(if ($up) { 2 } else { 0 }), [UIntPtr]::Zero) }
-[Console]::Out.WriteLine('ready')
-while ($null -ne ($line = [Console]::In.ReadLine())) {
-  if ($line -eq 'copy') {
-    # Let go of Shift and 1 from the hotkey, otherwise the app sees Ctrl+Shift+C.
-    Key 0x10 $true; Key 0xA0 $true; Key 0xA1 $true; Key 0x31 $true
-    Key 0x11 $false; Key 0x43 $false; Key 0x43 $true; Key 0x11 $true
-    [Console]::Out.WriteLine('done')
-  }
-}
-`;
+const user32 = koffi.load('user32.dll');
+const GetAsyncKeyState = user32.func('int16 __stdcall GetAsyncKeyState(int vKey)');
+const GetClipboardSequenceNumber = user32.func('uint32 __stdcall GetClipboardSequenceNumber()');
+const keybd_event = user32.func('void __stdcall keybd_event(uint8 bVk, uint8 bScan, uint32 dwFlags, uintptr_t dwExtraInfo)');
 
-let helper = null;
-let waiting = null;
-
-function startHelper() {
-  const encoded = Buffer.from(HELPER, 'utf16le').toString('base64');
-  helper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], {
-    windowsHide: true,
-  });
-  helper.stdout.setEncoding('utf8');
-  helper.stdout.on('data', (chunk) => {
-    if (chunk.includes('done') && waiting) {
-      waiting();
-      waiting = null;
-    }
-  });
-  helper.on('exit', () => {
-    helper = null;
-  });
-}
-
-function pressCtrlC() {
-  if (!helper) startHelper();
-  return new Promise((resolve) => {
-    waiting = resolve;
-    helper.stdin.write('copy\n');
-    setTimeout(resolve, 3000); // never hang if the helper is stuck
-  });
-}
+const VK = { SHIFT: 0x10, CONTROL: 0x11, MENU: 0x12, C: 0x43, ONE: 0x31 };
+const KEYUP = 0x0002;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const isDown = (vk) => (GetAsyncKeyState(vk) & 0x8000) !== 0;
+const key = (vk, up) => keybd_event(vk, 0, up ? KEYUP : 0, 0);
 
-// Returns the selected text. If nothing is selected, returns what was already in the
-// clipboard (so "copy first, then press the hotkey" still works).
+// Wait (briefly) for the user to let go of Shift, Alt and 1, otherwise the app we send Ctrl+C to
+// would see Ctrl+Shift+C. Keys still held after that are released for them.
+async function waitForHotkeyRelease() {
+  const keys = [VK.SHIFT, VK.MENU, VK.ONE];
+  for (let i = 0; i < 40 && keys.some(isDown); i++) await sleep(15);
+  for (const vk of keys) if (isDown(vk)) key(vk, true);
+}
+
+// Returns { text, copied }. copied=false means nothing was selected, so the text is whatever
+// was already in the clipboard (the "copy first, then press the hotkey" way still works).
 async function copySelection() {
-  const before = clipboard.readText();
-  clipboard.clear();
-  await pressCtrlC();
-  for (let i = 0; i < 20; i++) {
-    const text = clipboard.readText();
-    if (text.trim()) return text;
-    await sleep(50);
+  await waitForHotkeyRelease();
+  const before = GetClipboardSequenceNumber();
+  key(VK.CONTROL, false);
+  key(VK.C, false);
+  key(VK.C, true);
+  key(VK.CONTROL, true);
+
+  for (let i = 0; i < 60; i++) {
+    await sleep(25);
+    if (GetClipboardSequenceNumber() !== before) {
+      // Some apps write the clipboard in several steps; give them a moment to finish.
+      for (let j = 0; j < 10; j++) {
+        await sleep(30);
+        const text = clipboard.readText();
+        if (text.trim()) return { text, copied: true };
+      }
+      break;
+    }
   }
-  if (process.env.BIDDERR_DEBUG) console.log('[copy] nothing selected, using the old clipboard');
-  if (before) clipboard.writeText(before);
-  return before;
+  return { text: clipboard.readText(), copied: false };
 }
 
-function stopHelper() {
-  helper?.kill();
-}
-
-module.exports = { copySelection, startHelper, stopHelper };
+module.exports = { copySelection };

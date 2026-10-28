@@ -16,6 +16,7 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "koffi": "^2.16.3"
   }
 }

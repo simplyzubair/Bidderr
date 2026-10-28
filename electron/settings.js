@@ -52,10 +52,9 @@ $('key').addEventListener('keydown', (e) => {
 
 // ---------- proposals ----------
 
-function showStatus({ text, lastProposal }) {
-  const writing = /writing/.test(text);
-  setNote($('status'), text, /copied/.test(text) ? 'ok' : writing ? '' : 'error');
-  $('write').disabled = writing;
+function showStatus({ kind, text, lastProposal }) {
+  setNote($('status'), text, kind === 'working' ? '' : kind);
+  $('write').disabled = kind === 'working';
   if (lastProposal) $('last').value = lastProposal;
 }
 window.bidderr.onStatus(showStatus);

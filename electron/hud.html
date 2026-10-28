@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'">
+  <link rel="stylesheet" href="hud.css">
+</head>
+<body>
+  <!-- The small status box in the screen corner: shows what Bidderr is doing after Ctrl+Shift+1. -->
+  <div id="hud" class="hud">
+    <img class="logo" src="../branding/logo.svg" alt="">
+    <div class="text">
+      <div id="title" class="title">Bidderr</div>
+      <div id="detail" class="detail"></div>
+    </div>
+    <div id="icon" class="icon"></div>
+  </div>
+  <script src="hud.js"></script>
+</body>
+</html>
