@@ -33,8 +33,23 @@ function Press-Hotkey {
 
 function Press-Keys([byte[]]$mods, [byte]$vk) {
   foreach ($m in $mods) { Key $m $false }
-  Key $vk $false; Key $vk $true
+  Start-Sleep -Milliseconds 50
+  Key $vk $false; Start-Sleep -Milliseconds 75; Key $vk $true
+  Start-Sleep -Milliseconds 50
   [array]::Reverse($mods); foreach ($m in $mods) { Key $m $true }
+}
+
+# Verify the test app actually received the selection shortcut, then restore the test clipboard
+# and select again so Bidderr itself has to perform the copy.
+function Assert-Selection([string]$expected) {
+  $saved = Get-Clipboard -Raw
+  Press-Keys @(0x11) 0x43 # Ctrl+C probe
+  Start-Sleep -Milliseconds 200
+  $selected = Get-Clipboard -Raw
+  if (-not $selected.Contains($expected)) { throw "Could not select text containing '$expected': $selected" }
+  Set-Clipboard -Value $saved
+  Press-Keys @(0x11) 0x41 # Restore the selection for the hotkey test
+  Start-Sleep -Milliseconds 200
 }
 
 function Focus-Process($proc) {
@@ -115,7 +130,7 @@ try {
   Set-Content $jobFile "NOTEPAD JOB: Hi, I am Sarah. I need my blurry logo redrawn as a clean vector file for print. Budget 40 dollars."
   $notepad = Start-Process notepad.exe $jobFile -PassThru
   $procs += $notepad
-  Run-Case '1-notepad-selection' { Focus-Process $notepad; Press-Keys @(0x11) 0x41 <# Ctrl+A #>; Start-Sleep -Milliseconds 300 } 'NOTEPAD JOB' 'true'
+  Run-Case '1-notepad-selection' { Focus-Process $notepad; Press-Keys @(0x11) 0x41 <# Ctrl+A #>; Assert-Selection 'NOTEPAD JOB' } 'NOTEPAD JOB' 'true'
 
   # 2. Nothing selected, job copied before: uses the clipboard.
   Run-Case '2-copied-first' {
@@ -132,7 +147,7 @@ try {
   $procs += $chromeProc
   Start-Sleep 5
   $chromeWin = Get-Process chrome | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-  Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Start-Sleep -Milliseconds 400 } 'CHROME JOB' 'true'
+  Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB' } 'CHROME JOB' 'true'
 
   Write-Host 'ALL END-TO-END TESTS PASSED'
 } catch {

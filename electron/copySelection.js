@@ -27,6 +27,7 @@ const GetWindowTextW = user32.func('int __stdcall GetWindowTextW(void *hWnd, _Ou
 
 const VK = { SHIFT: 0x10, CONTROL: 0x11, MENU: 0x12, LWIN: 0x5b, C: 0x43, ONE: 0x31 };
 const KEYEVENTF_KEYUP = 0x0002;
+const KEYEVENTF_SCANCODE = 0x0008;
 const INPUT_SIZE = koffi.sizeof(INPUT);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,9 +38,9 @@ function sendKeys(events) {
   const inputs = events.map(([vk, up]) => ({
     type: 1, // INPUT_KEYBOARD
     pad1: 0,
-    wVk: vk,
+    wVk: 0,
     wScan: MapVirtualKeyW(vk, 0),
-    dwFlags: up ? KEYEVENTF_KEYUP : 0,
+    dwFlags: KEYEVENTF_SCANCODE | (up ? KEYEVENTF_KEYUP : 0),
     time: 0,
     dwExtraInfo: 0,
     pad2: 0,
