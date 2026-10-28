@@ -126,6 +126,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 7
+        continue-on-error: true
         env:
           ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 5
         with:
@@ -140,6 +142,9 @@ jobs:
         with:
           name: e2e-android
           path: e2e-android/
+      - name: Verify Android E2E passed
+        if: always()
+        run: test -f e2e-android/PASS
 
   release:
     needs: [version, android, windows, e2e-windows, e2e-android]

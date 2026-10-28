@@ -150,3 +150,4 @@ grep -q "BUBBLE JOB" "$OUT/3-after-bubble.xml" || fail "the bubble did not read 
 shot 3-after-bubble
 echo "PASS bubble"
 echo "ALL ANDROID END-TO-END TESTS PASSED"
+touch "$OUT/PASS"
