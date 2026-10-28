@@ -101,7 +101,12 @@ public class BubbleService extends AccessibilityService {
             }
         });
 
-        windowManager.addView(bubble, params);
+        try {
+            windowManager.addView(bubble, params);
+        } catch (RuntimeException e) {
+            Log.e("BidderrBubble", "Could not add bubble overlay", e);
+            throw e;
+        }
     }
 
     // Show the bubble only in browsers and job apps, so it stays out of the way elsewhere.
@@ -177,10 +182,12 @@ public class BubbleService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
+        Log.i("BidderrBubble", "Accessibility service interrupted");
     }
 
     @Override
     public void onDestroy() {
+        Log.i("BidderrBubble", "Accessibility service destroyed");
         if (bubble != null && windowManager != null) windowManager.removeView(bubble);
         bubble = null;
         super.onDestroy();

@@ -13,7 +13,7 @@ PKG=com.bidderr.app
 fail() {
   echo "FAILED: $*"
   shot failure
-  adb logcat -d -v time -s BidderrBubble:I AndroidRuntime:E > "$OUT/logcat.txt" || true
+  adb logcat -d -v time -s BidderrBubble:I AndroidRuntime:E WindowManager:E AccessibilityManagerService:E ActivityManager:E > "$OUT/logcat.txt" || true
   exit 1
 }
 shot() { adb exec-out screencap -p > "$OUT/$1.png" || true; }
