@@ -13,6 +13,31 @@ PKG=com.bidderr.app
 fail() { echo "FAILED: $*"; shot failure; exit 1; }
 shot() { adb exec-out screencap -p > "$OUT/$1.png" || true; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true; }
+tap_text() {
+  local needle="$1" xml="$OUT/current.xml" coords
+  dump current
+  coords=$(python3 - "$xml" "$needle" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+needle = sys.argv[2].casefold()
+for node in root.iter("node"):
+    if needle not in node.attrib.get("text", "").casefold():
+        continue
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        left, top, right, bottom = map(int, match.groups())
+        print((left + right) // 2, (top + bottom) // 2)
+        break
+else:
+    raise SystemExit(1)
+PY
+  ) || return 1
+  read -r x y <<< "$coords"
+  adb shell input tap "$x" "$y"
+}
 # Wait until the screen shows some text (WebView text shows up in the UI dump).
 wait_for_text() {
   for _ in $(seq 1 30); do
@@ -55,6 +80,14 @@ adb reverse tcp:8765 tcp:8765
 sleep 1
 adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main \
   -d "http://localhost:8765/job.html" || fail "open chrome"
+# Chrome's notification onboarding can appear above the loaded page on a fresh emulator.
+# Dismiss only its labeled opt-out button so it cannot hide the page from UI automation.
+for _ in $(seq 1 5); do
+  dump 2-chrome
+  if grep -q "BUBBLE JOB" "$OUT/2-chrome.xml"; then break; fi
+  tap_text "No thanks" || break
+  sleep 1
+done
 wait_for_text "BUBBLE JOB" 2-chrome || fail "chrome did not show the job page"
 sleep 2
 shot 2-chrome-with-bubble
