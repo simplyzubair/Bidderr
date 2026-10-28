@@ -105,7 +105,7 @@ public class BubbleService extends AccessibilityService {
     // Show the bubble only in browsers and job apps, so it stays out of the way elsewhere.
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (bubble == null || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        if (bubble == null) return;
         CharSequence pkgSeq = event.getPackageName();
         if (pkgSeq == null) return;
         String pkg = pkgSeq.toString().toLowerCase();
