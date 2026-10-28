@@ -129,5 +129,28 @@ OUTPUT RULES:
     throw lastError;
   }
 
-  return { MODELS, DEFAULT_PROMPT, toUnicodeBold, formatProposal, generateProposal };
+  // Asks Google if the key works (a free call that lists models). Returns 'ok', 'invalid' or 'offline'.
+  async function checkApiKey(apiKey, { fetchImpl = fetch } = {}) {
+    const key = String(apiKey || '').trim();
+    if (!key) return 'invalid';
+    try {
+      const res = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+        headers: { 'x-goog-api-key': key },
+      });
+      if (res.ok) return 'ok';
+      return res.status === 400 || res.status === 401 || res.status === 403 ? 'invalid' : 'offline';
+    } catch {
+      return 'offline';
+    }
+  }
+
+  // "AIzaSyD...x9Q2" -> "AIza••••x9Q2", safe to show on screen.
+  function maskKey(apiKey) {
+    const key = String(apiKey || '').trim();
+    if (!key) return '';
+    if (key.length <= 10) return '••••';
+    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+  }
+
+  return { MODELS, DEFAULT_PROMPT, toUnicodeBold, formatProposal, generateProposal, checkApiKey, maskKey };
 });

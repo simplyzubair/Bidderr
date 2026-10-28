@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -14,7 +13,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.widget.TextView;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.util.ArrayDeque;
@@ -29,7 +28,7 @@ public class BubbleService extends AccessibilityService {
     private static final int MAX_CHARS = 15000;
 
     private WindowManager windowManager;
-    private TextView bubble;
+    private ImageView bubble;
     private WindowManager.LayoutParams params;
 
     @Override
@@ -43,17 +42,15 @@ public class BubbleService extends AccessibilityService {
         float dp = getResources().getDisplayMetrics().density;
         int size = (int) (56 * dp);
 
-        GradientDrawable circle = new GradientDrawable();
+        // Brand gradient circle with the pen-B mark (same drawing as the app icon).
+        GradientDrawable circle = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {Color.rgb(52, 211, 153), Color.rgb(16, 185, 129), Color.rgb(15, 118, 110)});
         circle.setShape(GradientDrawable.OVAL);
-        circle.setColor(Color.rgb(34, 197, 94));
         circle.setStroke((int) (2 * dp), Color.WHITE);
 
-        bubble = new TextView(this);
-        bubble.setText("B");
-        bubble.setTextColor(Color.rgb(5, 46, 22));
-        bubble.setTextSize(24);
-        bubble.setTypeface(Typeface.DEFAULT_BOLD);
-        bubble.setGravity(Gravity.CENTER);
+        bubble = new ImageView(this);
+        bubble.setImageResource(R.drawable.ic_launcher_foreground);
+        bubble.setScaleType(ImageView.ScaleType.FIT_CENTER);
         bubble.setBackground(circle);
         bubble.setElevation(8 * dp);
         bubble.setContentDescription("Write proposal with Bidderr");

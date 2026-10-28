@@ -4,11 +4,12 @@ const { app, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, Noti
 const fs = require('fs');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
-const { generateProposal, DEFAULT_PROMPT } = require('../shared/proposal.js');
+const { generateProposal, checkApiKey, maskKey, DEFAULT_PROMPT } = require('../shared/proposal.js');
 const { copySelection, startHelper, stopHelper } = require('./copySelection.js');
 
 const HOTKEY = 'CommandOrControl+Shift+1';
 const ICON = path.join(__dirname, '../public/icon.png');
+const TRAY_ICON = path.join(__dirname, '../public/tray.png');
 
 let tray = null;
 let settingsWindow = null;
@@ -113,12 +114,13 @@ function openSettings() {
     return;
   }
   settingsWindow = new BrowserWindow({
-    width: 520,
-    height: 640,
+    width: 540,
+    height: 760,
+    minWidth: 420,
     title: 'Bidderr',
     icon: ICON,
     autoHideMenuBar: true,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0a0f1c',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -153,11 +155,31 @@ function buildTrayMenu() {
   ]);
 }
 
-ipcMain.handle('get-state', () => ({ hasKey: Boolean(getApiKey()), hotkeyOk: globalShortcut.isRegistered(HOTKEY), lastProposal }));
-ipcMain.handle('save-key', (_e, key) => {
-  saveApiKey(String(key || '').trim());
-  return Boolean(getApiKey());
+const keyState = () => ({ hasKey: Boolean(getApiKey()), maskedKey: maskKey(getApiKey()) });
+
+ipcMain.handle('get-state', () => ({
+  ...keyState(),
+  hotkeyOk: globalShortcut.isRegistered(HOTKEY),
+  lastProposal,
+  version: app.getVersion(),
+}));
+
+// Tests the key with Google first. A key Google rejects is never saved, and an empty box
+// never wipes the saved key. Returns state: ok | offline (saved, untested) | invalid | error.
+ipcMain.handle('save-key', async (_e, key) => {
+  const newKey = String(key || '').trim().slice(0, 200);
+  const check = await checkApiKey(newKey);
+  if (check === 'invalid') return { state: 'invalid', ...keyState() };
+  try {
+    saveApiKey(newKey);
+  } catch (e) {
+    return { state: 'error', message: `Could not save the key: ${e.message}`, ...keyState() };
+  }
+  if (getApiKey() !== newKey) return { state: 'error', message: 'The key did not save. Please try again.', ...keyState() };
+  setStatus('ready. Select a job and press Ctrl+Shift+1.');
+  return { state: check, ...keyState() };
 });
+ipcMain.handle('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
 ipcMain.handle('write-now', () => writeProposal());
 ipcMain.handle('get-prompt', () => ({ prompt: getPrompt(), defaultPrompt: DEFAULT_PROMPT }));
 ipcMain.handle('save-prompt', (_e, prompt) => {
@@ -173,7 +195,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     app.setAppUserModelId('com.bidderr.app');
-    tray = new Tray(ICON);
+    tray = new Tray(TRAY_ICON);
     tray.setToolTip('Bidderr - select a job, press Ctrl+Shift+1');
     tray.setContextMenu(buildTrayMenu());
     tray.on('click', openSettings);

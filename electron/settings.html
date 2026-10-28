@@ -2,51 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
   <title>Bidderr</title>
   <link rel="stylesheet" href="../shared/style.css">
 </head>
 <body>
-  <h1>Bid<span>derr</span></h1>
-  <p class="tagline">Copy a job. Press a key. Paste a winning proposal.</p>
-
-  <div class="card">
-    <h2>How to use</h2>
-    <ol>
-      <li>Select the job posting with your mouse (tip: <kbd>Ctrl</kbd>+<kbd>A</kbd> selects the whole page).</li>
-      <li>Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>. A message pops up when it is ready.</li>
-      <li>Click the proposal box and paste (<kbd>Ctrl</kbd>+<kbd>V</kbd>).</li>
-    </ol>
-    <p id="hotkey-warning" class="status error hidden">Ctrl+Shift+1 is taken by another app. Use the button below or the tray menu.</p>
-  </div>
-
-  <div class="card">
-    <h2>Free Google API key</h2>
-    <p id="key-state" class="status"></p>
-    <p>Get one free at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> and paste it here.</p>
-    <div class="row">
-      <input id="key" type="password" placeholder="Paste your API key" autocomplete="off">
-      <button id="save" class="primary fixed">Save</button>
+  <header class="app-header">
+    <img class="logo" src="../branding/logo.svg" alt="">
+    <div>
+      <h1>Bidderr</h1>
+      <p>Winning proposals in one keypress</p>
     </div>
-  </div>
+    <span id="ready-pill" class="pill">Loading</span>
+  </header>
 
-  <div class="card">
-    <button id="write" class="big">Write proposal from copied text</button>
-    <p id="status" class="status"></p>
-    <textarea id="last" readonly placeholder="Your last proposal shows here."></textarea>
-  </div>
+  <section class="card">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><span class="num">1</span><b>Select the job post</b><small><kbd>Ctrl</kbd><kbd>A</kbd> selects the whole page</small></li>
+      <li><span class="num">2</span><b>Press <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>1</kbd></b><small>Wait for the "Proposal ready" message</small></li>
+      <li><span class="num">3</span><b>Paste it</b><small>Click the proposal box, press <kbd>Ctrl</kbd><kbd>V</kbd></small></li>
+    </ol>
+    <p id="hotkey-warning" class="note error hidden">Ctrl+Shift+1 is taken by another app. Use the button under "Last proposal" instead.</p>
+  </section>
+
+  <section id="key-card" class="card">
+    <div class="card-head">
+      <h2>Google API key</h2>
+      <span id="key-pill" class="pill">No key</span>
+    </div>
+    <p class="muted">Free from <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. It stays encrypted on this PC.</p>
+    <div class="field">
+      <input id="key" type="password" placeholder="Paste a new API key" autocomplete="off" spellcheck="false">
+      <button id="toggle-key" class="btn ghost inside" type="button">Show</button>
+    </div>
+    <div class="row"><button id="save" class="btn primary">Save key</button></div>
+    <p id="key-note" class="note"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Last proposal</h2>
+      <button id="copy-last" class="btn ghost sm">Copy</button>
+    </div>
+    <textarea id="last" readonly placeholder="Your proposal shows here after you press Ctrl+Shift+1."></textarea>
+    <div class="row"><button id="write" class="btn">Write from copied text</button></div>
+    <p id="status" class="note"></p>
+  </section>
 
   <details class="card">
-    <summary><strong>Edit prompt (admin)</strong></summary>
-    <p class="tagline">This is what the AI is told to do. Change it any time, then press Save.</p>
+    <summary>Edit prompt (admin)</summary>
+    <p class="muted">This is what the AI is told to do. Change it any time, then save.</p>
     <textarea id="prompt" class="tall" spellcheck="true"></textarea>
     <div class="row">
-      <button id="save-prompt" class="primary">Save prompt</button>
-      <button id="reset-prompt">Reset to default</button>
+      <button id="save-prompt" class="btn primary">Save prompt</button>
+      <button id="reset-prompt" class="btn">Reset to default</button>
     </div>
-    <p id="prompt-status" class="status"></p>
   </details>
 
+  <footer id="footer">Bidderr</footer>
+
+  <script src="../shared/ui.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

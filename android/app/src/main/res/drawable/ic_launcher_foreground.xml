@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The B-pen mark from branding/logo.svg, scaled into the adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.78"
+        android:scaleY="0.78"
+        android:translateY="-22">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M168,104 H286 A62,62 0 0,1 286,228 H296 A66,66 0 0,1 296,360 H216 C222,390 198,420 183,446 C168,420 144,390 150,360 V122 A18,18 0 0,1 168,104 Z M216,150 H286 A29,29 0 0,1 286,208 H216 Z M216,248 H296 A33,33 0 0,1 296,314 H216 Z M174,371 A9,9 0 1,0 192,371 A9,9 0 1,0 174,371 Z M180,386 H186 V436 H180 Z" />
+        <path
+            android:fillColor="#EBFFFFFF"
+            android:pathData="M183,446 C250,470 334,452 380,398 C384,393 391,397 388,403 C346,470 254,486 183,446 Z" />
+    </group>
+</vector>

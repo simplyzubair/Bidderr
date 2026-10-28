@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { generateProposal, formatProposal, toUnicodeBold, MODELS, DEFAULT_PROMPT } = require('../shared/proposal.js');
+const { generateProposal, formatProposal, toUnicodeBold, MODELS, DEFAULT_PROMPT, checkApiKey, maskKey } = require('../shared/proposal.js');
 
 const JOB = 'Hi, I am Sarah. I need my blurry logo redrawn as a clean vector file for print. Budget $40.';
 
@@ -52,6 +52,20 @@ test('generateProposal falls back to the next model on quota errors', async () =
   const f = fakeFetch([{ status: 429, body: { error: { message: 'quota' } } }, answer('ok text here')]);
   assert.equal(await generateProposal(JOB, 'KEY', { fetchImpl: f }), 'ok text here');
   assert.match(f.calls[1].url, new RegExp(MODELS[1]));
+});
+
+test('checkApiKey reports ok, invalid and offline', async () => {
+  const status = (s) => async () => ({ ok: s < 400, status: s });
+  assert.equal(await checkApiKey('KEY', { fetchImpl: status(200) }), 'ok');
+  assert.equal(await checkApiKey('KEY', { fetchImpl: status(400) }), 'invalid');
+  assert.equal(await checkApiKey('KEY', { fetchImpl: status(503) }), 'offline');
+  assert.equal(await checkApiKey('KEY', { fetchImpl: async () => { throw new Error('no net'); } }), 'offline');
+  assert.equal(await checkApiKey('  '), 'invalid');
+});
+
+test('maskKey hides the middle of the key', () => {
+  assert.equal(maskKey('AIzaSyD1234567890x9Q2'), 'AIza••••x9Q2');
+  assert.equal(maskKey(''), '');
 });
 
 test('generateProposal gives friendly errors', async () => {

@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ssh co 'mkdir -p /var/www/bidderr'
-for f in website/index.html website/version.js public/icon.png; do
+for f in website/index.html website/version.js website/logo.svg website/icon.png; do
   ssh co "cat > /var/www/bidderr/$(basename "$f")" < "$f"
 done
 ssh co 'chmod 644 /var/www/bidderr/* && nginx -t && systemctl reload nginx'

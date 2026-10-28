@@ -2,85 +2,97 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://generativelanguage.googleapis.com https://api.github.com">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://generativelanguage.googleapis.com https://api.github.com">
   <title>Bidderr</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Bid<span>derr</span></h1>
-  <p class="tagline">Open a job. Tap the B. Paste a winning proposal.</p>
+  <header class="app-header">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="0.55" stop-color="#10b981"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs>
+      <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+      <g transform="translate(0 -18)">
+        <path fill="#fff" fill-rule="evenodd" d="M168 104H286A62 62 0 0 1 286 228H296A66 66 0 0 1 296 360H216C222 390 198 420 183 446C168 420 144 390 150 360V122A18 18 0 0 1 168 104ZM216 150H286A29 29 0 0 1 286 208H216ZM216 248H296A33 33 0 0 1 296 314H216ZM174 371A9 9 0 1 0 192 371A9 9 0 1 0 174 371ZM180 386H186V436H180Z"/>
+        <path fill="#fff" fill-opacity="0.92" d="M183 446C250 470 334 452 380 398C384 393 391 397 388 403C346 470 254 486 183 446Z"/>
+      </g>
+    </svg>
+    <div>
+      <h1>Bidderr</h1>
+      <p>Winning proposals in one tap</p>
+    </div>
+    <span id="ready-pill" class="pill">Loading</span>
+  </header>
 
-  <div id="update-card" class="card hidden">
-    <h2 id="update-title">Update available</h2>
-    <p id="update-status" class="status"></p>
-    <button id="update" class="primary big">Update now</button>
-  </div>
+  <section id="update-card" class="card highlight hidden">
+    <div class="card-head"><h2 id="update-title">Update available</h2></div>
+    <button id="update" class="btn primary block">Update now</button>
+    <p id="update-note" class="note"></p>
+  </section>
 
-  <div id="bubble-card" class="card hidden">
-    <h2>Turn on the floating B bubble</h2>
-    <p>The green <strong>B</strong> floats over job pages in Chrome and the Upwork app. Tap it and Bidderr reads the job by itself. No selecting, no copying.</p>
-    <ol>
-      <li>Tap <strong>Open settings</strong> below.</li>
-      <li>Find <strong>Bidderr bubble</strong> (maybe under "Installed apps") and turn it on.</li>
-      <li>If it is greyed out: go to Settings, Apps, Bidderr, tap the <strong>⋮</strong> menu (top right), then <strong>Allow restricted settings</strong>. Then try step 2 again.</li>
+  <section id="bubble-card" class="card highlight hidden">
+    <div class="card-head"><h2>Turn on the B bubble</h2><span class="pill warn">Off</span></div>
+    <p class="muted">A green <strong>B</strong> floats over job pages. Tap it and Bidderr reads the job by itself. No selecting, no copying.</p>
+    <ol class="steps">
+      <li><span class="num">1</span><b>Tap Open settings</b><small>Below this list</small></li>
+      <li><span class="num">2</span><b>Turn on "Bidderr bubble"</b><small>Maybe under "Installed apps"</small></li>
+      <li><span class="num">3</span><b>Greyed out?</b><small>Settings › Apps › Bidderr › ⋮ › Allow restricted settings, then step 2</small></li>
     </ol>
-    <div class="row"><button id="bubble-settings" class="primary">Open settings</button></div>
-  </div>
+    <div class="row"><button id="bubble-settings" class="btn primary">Open settings</button></div>
+  </section>
 
-  <div id="key-card" class="card">
-    <h2>Free Google API key</h2>
-    <p id="key-state" class="status"></p>
-    <p>Get one free at <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> and paste it here.</p>
-    <div class="row">
-      <input id="key" type="password" placeholder="Paste your API key" autocomplete="off">
-      <button id="save-key" class="primary fixed">Save</button>
+  <button id="paste-write" class="btn primary big">Paste job &amp; write proposal</button>
+  <p id="status" class="note"></p>
+
+  <section class="card mt">
+    <div class="card-head">
+      <h2>Proposal</h2>
+      <button id="copy" class="btn ghost sm">Copy</button>
     </div>
-  </div>
-
-  <button id="paste-write" class="primary big">Paste job &amp; write proposal</button>
-  <p id="status" class="status"></p>
-
-  <div class="card">
-    <h2>Proposal</h2>
     <textarea id="result" placeholder="Your proposal shows here. It is copied for you automatically."></textarea>
-    <div class="row">
-      <button id="copy" class="primary">Copy</button>
-      <button id="again">Write again</button>
-    </div>
-  </div>
+    <div class="row"><button id="again" class="btn">Write a new version</button></div>
+  </section>
 
-  <details class="card">
-    <summary><strong>Job posting</strong></summary>
-    <textarea id="job" placeholder="The job text shows here. You can also type or paste it yourself."></textarea>
-    <div class="row"><button id="write">Write proposal from this text</button></div>
+  <details id="key-card" class="card">
+    <summary>Google API key <span id="key-pill" class="pill">No key</span></summary>
+    <p class="muted">Free from <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a>. It stays on this phone.</p>
+    <div class="field">
+      <input id="key" type="password" placeholder="Paste a new API key" autocomplete="off" spellcheck="false">
+      <button id="toggle-key" class="btn ghost inside" type="button">Show</button>
+    </div>
+    <div class="row"><button id="save-key" class="btn primary">Save key</button></div>
+    <p id="key-note" class="note"></p>
   </details>
 
   <details class="card">
-    <summary><strong>Edit prompt (admin)</strong></summary>
-    <p class="tagline">This is what the AI is told to do. Change it any time, then press Save.</p>
+    <summary>Job posting</summary>
+    <textarea id="job" placeholder="The job text shows here. You can also type or paste it yourself."></textarea>
+    <div class="row"><button id="write" class="btn">Write proposal from this text</button></div>
+  </details>
+
+  <details class="card">
+    <summary>Edit prompt (admin)</summary>
+    <p class="muted">This is what the AI is told to do. Change it any time, then save.</p>
     <textarea id="prompt" class="tall"></textarea>
     <div class="row">
-      <button id="save-prompt" class="primary">Save prompt</button>
-      <button id="reset-prompt">Reset to default</button>
+      <button id="save-prompt" class="btn primary">Save prompt</button>
+      <button id="reset-prompt" class="btn">Reset</button>
     </div>
-    <p id="prompt-status" class="status"></p>
   </details>
 
   <details class="card">
-    <summary><strong>Tips</strong></summary>
-    <ol>
+    <summary>Help</summary>
+    <ol class="plain">
       <li>Open a job post and tap the green <strong>B</strong>. You come back to the job with the proposal copied. Tap the proposal box and paste.</li>
       <li>Drag the <strong>B</strong> to move it out of the way.</li>
-      <li>No bubble? Select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share → Bidderr</strong>).</li>
-      <li>To change your API key, open this app and tap <strong>Change API key</strong> below.</li>
+      <li>No bubble? Select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share › Bidderr</strong>).</li>
     </ol>
-    <div class="row"><button id="change-key">Change API key</button></div>
   </details>
 
-  <p id="version" class="tagline"></p>
+  <footer id="version"></footer>
 
   <script src="proposal.js"></script>
+  <script src="ui.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

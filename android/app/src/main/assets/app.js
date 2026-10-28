@@ -1,7 +1,9 @@
-// Bidderr Android page. window.Bidderr is the shared engine (proposal.js),
-// window.Android is the clipboard bridge from MainActivity.java.
+// Bidderr Android page. window.Bidderr is the shared engine (proposal.js), window.ui the shared
+// UI helpers (ui.js), window.Android the bridge from MainActivity.java.
 const $ = (id) => document.getElementById(id);
-const { generateProposal, DEFAULT_PROMPT } = window.Bidderr;
+const { generateProposal, checkApiKey, maskKey, DEFAULT_PROMPT } = window.Bidderr;
+const { toast, setNote, busyButton } = window.ui;
+
 const store = {
   get key() { return localStorage.getItem('bidderr.key') || ''; },
   set key(v) { localStorage.setItem('bidderr.key', v); },
@@ -19,37 +21,71 @@ async function readClipboard() {
   return navigator.clipboard ? navigator.clipboard.readText() : '';
 }
 
-function setStatus(text, kind = '') {
-  $('status').textContent = text;
-  $('status').className = `status ${kind}`;
+// ---------- API key ----------
+
+function showKey() {
+  const has = Boolean(store.key);
+  setNote($('key-pill'), has ? maskKey(store.key) : 'No key', has ? 'ok' : 'error');
+  setNote($('ready-pill'), has ? 'Ready' : 'Add API key', has ? 'ok' : 'warn');
+  if (!has) $('key-card').open = true;
 }
 
-function showKeyCard(show) {
-  $('key-card').classList.toggle('hidden', !show);
-  $('key-state').textContent = store.key ? 'Key saved.' : 'No key saved yet.';
-  $('key-state').className = `status ${store.key ? 'ok' : 'error'}`;
-}
+$('toggle-key').addEventListener('click', () => {
+  const show = $('key').type === 'password';
+  $('key').type = show ? 'text' : 'password';
+  $('toggle-key').textContent = show ? 'Hide' : 'Show';
+});
+
+$('save-key').addEventListener('click', async () => {
+  const key = $('key').value.trim();
+  if (!key) {
+    setNote($('key-note'), 'Paste your API key in the box first.', 'error');
+    return;
+  }
+  const done = busyButton($('save-key'), 'Checking with Google...');
+  const check = await checkApiKey(key);
+  done();
+  if (check === 'invalid') {
+    setNote($('key-note'), 'Google says this key does not work. It was NOT saved. Copy it again and retry.', 'error');
+    toast('This API key does not work', 'error');
+    return;
+  }
+  store.key = key;
+  $('key').value = '';
+  showKey();
+  if (check === 'offline') {
+    setNote($('key-note'), `Saved (${maskKey(key)}), but Google could not be reached to test it.`, 'warn');
+    toast('Key saved (not tested, no internet)', 'warn');
+  } else {
+    setNote($('key-note'), `New API key saved and working: ${maskKey(key)}`, 'ok');
+    toast('New API key saved and working');
+  }
+});
+
+// ---------- writing proposals ----------
 
 let busy = false;
 async function write(jobText) {
-  if (busy) return;
+  if (busy) return false;
   busy = true;
-  document.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-  setStatus('Writing your proposal...');
+  const done = busyButton($('paste-write'), 'Writing your proposal...');
+  setNote($('status'), '');
   try {
     $('job').value = jobText;
     const proposal = await generateProposal(jobText, store.key, { prompt: store.prompt });
     $('result').value = proposal;
     copyText(proposal);
-    setStatus('Done! The proposal is copied. Go back and paste it.', 'ok');
+    setNote($('status'), 'Done! The proposal is copied. Go back and paste it.', 'ok');
+    toast('Proposal copied');
     return true;
   } catch (e) {
-    setStatus(e.message, 'error');
-    if (!store.key || /API key/.test(e.message)) showKeyCard(true);
+    setNote($('status'), e.message, 'error');
+    toast(e.message, 'error');
+    if (!store.key || /API key/.test(e.message)) $('key-card').open = true;
     return false;
   } finally {
     busy = false;
-    document.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    done();
   }
 }
 
@@ -59,6 +95,29 @@ window.onJobText = async (text, fromBubble) => {
   const ok = await write(text);
   if (ok && fromBubble && window.Android) setTimeout(() => window.Android.backToJob(), 700);
 };
+
+$('paste-write').addEventListener('click', async () => write(await readClipboard()));
+$('write').addEventListener('click', () => write($('job').value));
+$('again').addEventListener('click', () => write($('job').value));
+$('copy').addEventListener('click', () => {
+  if (!$('result').value) return;
+  copyText($('result').value);
+  toast('Proposal copied');
+});
+
+// ---------- prompt ----------
+
+$('save-prompt').addEventListener('click', () => {
+  store.prompt = $('prompt').value.trim();
+  $('prompt').value = store.prompt;
+  toast('Prompt saved. The next proposal uses it.');
+});
+$('reset-prompt').addEventListener('click', () => {
+  if (!confirm('Replace your prompt with the default one?')) return;
+  store.prompt = DEFAULT_PROMPT;
+  $('prompt').value = DEFAULT_PROMPT;
+  toast('Default prompt restored');
+});
 
 // ---------- floating bubble ----------
 
@@ -92,7 +151,7 @@ async function checkForUpdate() {
     const apk = (release.assets || []).find((a) => a.name.endsWith('.apk'));
     if (!latest || !apk || !isNewer(latest, installedVersion)) return;
     updateUrl = apk.browser_download_url;
-    $('update-title').textContent = `Update available: version ${latest}`;
+    $('update-title').textContent = `Update available: ${latest}`;
     $('update-card').classList.remove('hidden');
   } catch {
     // Offline: try again next time the app opens.
@@ -103,52 +162,19 @@ window.onUpdateStatus = (state) => {
   const messages = {
     downloading: ['Downloading the update...', ''],
     started: ['Tap Install on the next screen.', 'ok'],
-    needs_permission: ['Turn on "Allow from this source", come back, then tap Update now again.', ''],
+    needs_permission: ['Turn on "Allow from this source", come back, then tap Update now again.', 'warn'],
     failed: ['The update did not download. Check your internet and try again.', 'error'],
   };
   const [text, kind] = messages[state] || ['', ''];
-  $('update-status').textContent = text;
-  $('update-status').className = `status ${kind}`;
+  setNote($('update-note'), text, kind);
   $('update').disabled = state === 'downloading';
 };
 $('update').addEventListener('click', () => window.Android?.installUpdate(updateUrl));
 
-$('version').textContent = installedVersion ? `Bidderr ${installedVersion}` : '';
-refreshBubbleCard();
-checkForUpdate();
-
-$('paste-write').addEventListener('click', async () => write(await readClipboard()));
-$('write').addEventListener('click', () => write($('job').value));
-$('again').addEventListener('click', () => write($('job').value));
-$('copy').addEventListener('click', () => {
-  copyText($('result').value);
-  setStatus('Copied.', 'ok');
-});
-
-$('save-key').addEventListener('click', () => {
-  store.key = $('key').value.trim();
-  $('key').value = '';
-  showKeyCard(!store.key);
-  setStatus(store.key ? 'Key saved. You are ready.' : 'Please paste a key.', store.key ? 'ok' : 'error');
-});
-$('change-key').addEventListener('click', () => {
-  showKeyCard(true);
-  $('key').focus();
-});
-
-$('save-prompt').addEventListener('click', () => {
-  store.prompt = $('prompt').value.trim();
-  $('prompt').value = store.prompt;
-  $('prompt-status').textContent = 'Prompt saved. The next proposal will use it.';
-  $('prompt-status').className = 'status ok';
-});
-$('reset-prompt').addEventListener('click', () => {
-  if (!confirm('Replace your prompt with the default one?')) return;
-  store.prompt = DEFAULT_PROMPT;
-  $('prompt').value = DEFAULT_PROMPT;
-  $('prompt-status').textContent = 'Default prompt restored.';
-  $('prompt-status').className = 'status ok';
-});
+// ---------- start ----------
 
 $('prompt').value = store.prompt;
-showKeyCard(!store.key);
+$('version').textContent = installedVersion ? `Bidderr ${installedVersion} · updates from bidderr.skillsgeek.com` : 'Bidderr';
+showKey();
+refreshBubbleCard();
+checkForUpdate();
