@@ -71,6 +71,26 @@ echo "=== 2. Bubble over Chrome"
 if ! adb shell pm list packages | grep -q com.android.chrome; then
   echo "Chrome is not on this emulator image; skipping the bubble test"; exit 0
 fi
+# Serve the job page from the runner; the emulator reaches it as localhost:8765.
+mkdir -p "$OUT/site"
+echo '<html><head><meta name="viewport" content="width=device-width"></head><body><h1>Logo redraw</h1><p>BUBBLE JOB: Hello, my logo is blurry and I need it redrawn as a vector for print. Budget 40 dollars.</p></body></html>' > "$OUT/site/job.html"
+(cd "$OUT/site" && python3 -m http.server 8765 >/dev/null 2>&1 &)
+adb reverse tcp:8765 tcp:8765
+sleep 1
+# Clear Chrome's first-run prompt before enabling the accessibility service. UIAutomator's
+# temporary automation connection unbinds accessibility services, so don't use it afterward
+# until the bubble has been tapped.
+adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main \
+  -d "http://localhost:8765/job.html" || fail "open chrome"
+for _ in $(seq 1 5); do
+  dump 2-chrome
+  if grep -q "BUBBLE JOB" "$OUT/2-chrome.xml"; then break; fi
+  tap_text "No thanks" || break
+  sleep 1
+done
+wait_for_text "BUBBLE JOB" 2-chrome || fail "chrome did not show the job page"
+shot 2-chrome-ready
+
 adb shell settings put secure enabled_accessibility_services $PKG/$PKG.BubbleService
 adb shell settings put secure accessibility_enabled 1
 # Starting the app clears Android's stopped-package state and lets the enabled service bind.
@@ -81,27 +101,12 @@ for _ in $(seq 1 10); do
   sleep 1
 done
 grep -qi "BubbleService" "$OUT/accessibility.txt" || fail "accessibility service did not bind"
-# Skip Chrome's first-run screens.
-adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
-adb shell am set-debug-app --persistent com.android.chrome
-# Serve the job page from the runner; the emulator reaches it as localhost:8765.
-mkdir -p "$OUT/site"
-echo '<html><head><meta name="viewport" content="width=device-width"></head><body><h1>Logo redraw</h1><p>BUBBLE JOB: Hello, my logo is blurry and I need it redrawn as a vector for print. Budget 40 dollars.</p></body></html>' > "$OUT/site/job.html"
-(cd "$OUT/site" && python3 -m http.server 8765 >/dev/null 2>&1 &)
-adb reverse tcp:8765 tcp:8765
-sleep 1
+# Return to the already initialized page without UIAutomator disrupting the service.
 adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main \
-  -d "http://localhost:8765/job.html" || fail "open chrome"
-# Chrome's notification onboarding can appear above the loaded page on a fresh emulator.
-# Dismiss only its labeled opt-out button so it cannot hide the page from UI automation.
-for _ in $(seq 1 5); do
-  dump 2-chrome
-  if grep -q "BUBBLE JOB" "$OUT/2-chrome.xml"; then break; fi
-  tap_text "No thanks" || break
-  sleep 1
-done
-wait_for_text "BUBBLE JOB" 2-chrome || fail "chrome did not show the job page"
-sleep 2
+  -d "http://localhost:8765/job.html" || fail "return to Chrome"
+sleep 3
+adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/2-activity.txt"
+grep -q "com.android.chrome" "$OUT/2-activity.txt" || fail "Chrome is not in front before bubble tap"
 shot 2-chrome-with-bubble
 
 # The bubble (56dp) sits on the right edge, its top at half the usable height. Tap its middle;

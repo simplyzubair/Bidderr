@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -34,7 +33,6 @@ public class BubbleService extends AccessibilityService {
 
     @Override
     protected void onServiceConnected() {
-        Log.i("BidderrBubble", "Accessibility service connected");
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         addBubble();
     }
@@ -101,32 +99,20 @@ public class BubbleService extends AccessibilityService {
             }
         });
 
-        try {
-            windowManager.addView(bubble, params);
-        } catch (RuntimeException e) {
-            Log.e("BidderrBubble", "Could not add bubble overlay", e);
-            throw e;
-        }
+        windowManager.addView(bubble, params);
     }
 
     // Show the bubble only in browsers and job apps, so it stays out of the way elsewhere.
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (bubble == null) return;
+        if (bubble == null || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         CharSequence pkgSeq = event.getPackageName();
         if (pkgSeq == null) return;
         String pkg = pkgSeq.toString().toLowerCase();
-        if (pkg.contains("chrome")) {
-            Log.i("BidderrBubble", "Chrome event type=" + event.getEventType());
-        }
         // Ignore pop-ups that sit on top of the app (keyboard, notification shade, Bidderr itself).
         if (pkg.equals(getPackageName()) || pkg.contains("systemui") || pkg.contains("inputmethod")
                 || pkg.contains("keyboard")) return;
-        boolean visible = isJobApp(pkg);
-        bubble.setVisibility(visible ? View.VISIBLE : View.GONE);
-        if (pkg.contains("chrome")) {
-            Log.i("BidderrBubble", "Chrome bubble visible=" + visible);
-        }
+        bubble.setVisibility(isJobApp(pkg) ? View.VISIBLE : View.GONE);
     }
 
     private static boolean isJobApp(String pkg) {
@@ -182,12 +168,10 @@ public class BubbleService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        Log.i("BidderrBubble", "Accessibility service interrupted");
     }
 
     @Override
     public void onDestroy() {
-        Log.i("BidderrBubble", "Accessibility service destroyed");
         if (bubble != null && windowManager != null) windowManager.removeView(bubble);
         bubble = null;
         super.onDestroy();
