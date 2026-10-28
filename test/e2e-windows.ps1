@@ -74,9 +74,15 @@ function Assert-Selection([string]$expected) {
 }
 
 function Focus-Process($proc) {
-  for ($i = 0; $i -lt 60 -and $proc.MainWindowHandle -eq 0; $i++) { Start-Sleep -Milliseconds 250; $proc.Refresh() }
-  $h = $proc.MainWindowHandle
-  if ($h -eq 0) { throw "No window for $($proc.ProcessName)" }
+  if (-not $proc) { throw 'No process was provided to focus' }
+  $h = [IntPtr]::Zero
+  for ($i = 0; $i -lt 60; $i++) {
+    $proc.Refresh()
+    $candidate = $proc.MainWindowHandle
+    if ($candidate -ne [IntPtr]::Zero) { $h = $candidate; break }
+    Start-Sleep -Milliseconds 250
+  }
+  if ($h -eq [IntPtr]::Zero) { throw "No window for $($proc.ProcessName)" }
   for ($i = 0; $i -lt 10; $i++) {
     Key 0x12 $false; Key 0x12 $true   # Alt tap lets this script move the focus
     [E2E.Win]::ShowWindow($h, 9) | Out-Null
@@ -175,8 +181,12 @@ try {
   $chrome = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
   $chromeProc = Start-Process $chrome -ArgumentList '--no-first-run', '--no-default-browser-check', "--user-data-dir=$work\chrome", '--new-window', "file:///$($page -replace '\\','/')" -PassThru
   $procs += $chromeProc
-  Start-Sleep 5
-  $chromeWin = Get-Process chrome | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+  $chromeWin = $null
+  for ($i = 0; $i -lt 60 -and -not $chromeWin; $i++) {
+    $chromeWin = Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+    if (-not $chromeWin) { Start-Sleep -Milliseconds 500 }
+  }
+  if (-not $chromeWin) { throw 'Chrome did not create a desktop window' }
   Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB' } 'CHROME JOB' 'true'
 
   Write-Host 'ALL END-TO-END TESTS PASSED'
