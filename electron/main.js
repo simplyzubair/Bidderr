@@ -21,6 +21,7 @@ let tray = null;
 let settingsWindow = null;
 let hudWindow = null;
 let hudTimer = null;
+let hudKind = '';
 let busy = false;
 let lastProposal = '';
 
@@ -89,7 +90,7 @@ function createHud() {
   hudWindow.loadFile(path.join(__dirname, 'hud.html'));
 }
 
-// kind: working | ok | error. Finished states hide by themselves.
+// kind: working | ok | error | update. Finished states hide by themselves.
 function showHud(kind, title, detail = '') {
   log(`[hud] ${kind}: ${title}${detail ? ` - ${detail}` : ''}`);
   tray?.setToolTip(`Bidderr - ${title}`);
@@ -104,7 +105,9 @@ function showHud(kind, title, detail = '') {
   hudWindow.showInactive(); // never steal focus from the page the user is on
 
   clearTimeout(hudTimer);
-  if (kind !== 'working') hudTimer = setTimeout(() => hudWindow?.hide(), kind === 'ok' ? 5000 : 9000);
+  hudKind = kind;
+  const hideAfter = { ok: 5000, error: 9000, update: 15000 }[kind];
+  if (hideAfter) hudTimer = setTimeout(() => hudWindow?.hide(), hideAfter);
 }
 
 // ---------- the main action ----------
@@ -132,31 +135,52 @@ async function writeProposal({ fromSelection = false } = {}) {
     if (/API key/.test(e.message)) openSettings();
   } finally {
     busy = false;
-    if (updateReady) installUpdate();
   }
 }
 
-// ---------- automatic updates (from the newest GitHub release) ----------
+// ---------- updates (from the newest GitHub release) ----------
+// New versions download in the background. The user installs them with the "Update now"
+// button (main window, tray menu or the status box). If they never press it, the update
+// installs the next time Bidderr quits.
 
-let updateReady = false;
+// state: idle | checking | downloading | ready | latest | error
+let update = { state: 'idle', version: '', percent: 0 };
+
+function setUpdate(changes) {
+  update = { ...update, ...changes };
+  settingsWindow?.webContents.send('update', update);
+  tray?.setContextMenu(buildTrayMenu());
+}
+
+function checkForUpdates({ manual = false } = {}) {
+  if (DEV) {
+    setUpdate({ state: 'latest' });
+    return;
+  }
+  if (update.state === 'downloading' || update.state === 'ready') return;
+  setUpdate({ state: 'checking', manual });
+  autoUpdater.checkForUpdates().catch(() => setUpdate({ state: 'error' }));
+}
 
 function installUpdate() {
-  if (busy) return; // never restart in the middle of writing a proposal
+  if (update.state !== 'ready' || busy) return; // never restart in the middle of a proposal
   autoUpdater.quitAndInstall(true, true); // silent install, then start Bidderr again
 }
 
 function setupAutoUpdates() {
   if (DEV) return;
   autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-available', ({ version }) => setUpdate({ state: 'downloading', version, percent: 0 }));
+  autoUpdater.on('download-progress', ({ percent }) => setUpdate({ state: 'downloading', percent: Math.round(percent) }));
+  autoUpdater.on('update-not-available', () => setUpdate({ state: 'latest' }));
   autoUpdater.on('update-downloaded', ({ version }) => {
-    updateReady = true;
-    showHud('ok', `Updating to ${version}`, 'Bidderr restarts by itself in a few seconds');
-    setTimeout(installUpdate, 5000);
+    setUpdate({ state: 'ready', version });
+    showHud('update', `Update ${version} is ready`, 'Click here to install it (takes a few seconds)');
   });
-  autoUpdater.on('error', () => {}); // offline or GitHub down: just try again later
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  check();
-  setInterval(check, 3 * 60 * 60 * 1000);
+  autoUpdater.on('error', () => setUpdate({ state: 'error' })); // offline or GitHub down
+  checkForUpdates();
+  setInterval(checkForUpdates, 60 * 60 * 1000);
 }
 
 // ---------- main window and tray ----------
@@ -198,6 +222,9 @@ function buildTrayMenu() {
     { label: `Bidderr ${app.getVersion()}`, enabled: false },
     { label: 'Open Bidderr', click: openSettings },
     { label: 'Write proposal from copied text', click: () => writeProposal() },
+    update.state === 'ready'
+      ? { label: `Update now to ${update.version}`, click: installUpdate }
+      : { label: 'Check for updates', click: () => checkForUpdates({ manual: true }) },
     {
       label: 'Start with Windows',
       type: 'checkbox',
@@ -218,6 +245,7 @@ ipcMain.handle('get-state', () => ({
   hotkeyOk: globalShortcut.isRegistered(HOTKEY),
   lastProposal,
   version: app.getVersion(),
+  update,
 }));
 
 // Tests the key with Google first. A key Google rejects is never saved, and an empty box
@@ -246,8 +274,11 @@ ipcMain.handle('save-prompt', (_e, prompt) => {
 });
 ipcMain.on('hud-clicked', () => {
   hudWindow?.hide();
-  openSettings();
+  if (hudKind === 'update') installUpdate();
+  else openSettings();
 });
+ipcMain.handle('update-check', () => checkForUpdates({ manual: true }));
+ipcMain.handle('update-install', () => installUpdate());
 
 // ---------- start ----------
 

@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld('bidderr', {
   onStatus: (callback) => ipcRenderer.on('status', (_e, data) => callback(data)),
   onHud: (callback) => ipcRenderer.on('hud', (_e, data) => callback(data)),
   hudClicked: () => ipcRenderer.send('hud-clicked'),
+  onUpdate: (callback) => ipcRenderer.on('update', (_e, data) => callback(data)),
+  checkForUpdates: () => ipcRenderer.invoke('update-check'),
+  installUpdate: () => ipcRenderer.invoke('update-install'),
 });

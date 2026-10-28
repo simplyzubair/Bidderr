@@ -127,7 +127,11 @@ function refreshBubbleCard() {
   $('bubble-card').classList.toggle('hidden', !supported || window.Android.isBubbleOn());
 }
 $('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
-window.onAppResumed = refreshBubbleCard;
+// Coming back to the app: refresh the bubble card and look for a new version.
+window.onAppResumed = () => {
+  refreshBubbleCard();
+  if (!updateUrl) checkForUpdate();
+};
 
 // ---------- updates (newest release on GitHub) ----------
 
@@ -164,12 +168,14 @@ async function checkForUpdate() {
     if (!latest || !apk) throw new Error('Release APK not found');
     if (!isNewer(latest, installedVersion)) {
       updateUrl = '';
+      $('update-card').classList.remove('highlight');
       title.textContent = 'You’re up to date';
       setNote(note, `Installed version ${installedVersion}. Latest version ${latest}.`, 'ok');
       button.textContent = 'Check again';
       return;
     }
     updateUrl = apk.browser_download_url;
+    $('update-card').classList.add('highlight');
     title.textContent = `Update available: ${latest}`;
     setNote(note, `Installed version ${installedVersion}.`, '');
     button.textContent = 'Update now';

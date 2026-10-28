@@ -2,7 +2,7 @@
 
 - Proposal writer: Windows tray app (Electron, Ctrl+Shift+1) + Android app (WebView + floating bubble). See README.md.
 - One engine for both: `shared/proposal.js` (UMD script: `require` in Electron, `<script>` in the WebView). Keep it dependency-free.
-- Releases: every push to `main` (not `*.md` / `website/`) publishes `v2.0.<run>`; both apps auto-update from GitHub releases. Never hand-tag.
+- Releases: every push to `main` (not `*.md` / `website/`) publishes `v2.0.<run>`; both apps pick it up from GitHub releases and show an "Update now" button (Windows downloads in the background first). Never hand-tag.
 - Android signing key lives only in GitHub secrets + `D:\Backups\bidderr-signing` + NAS `~/Backups/bidderr-signing`. Never commit it.
 - Website: `bash scripts/deploy-website.sh` (host nginx on `co`, `/var/www/bidderr`, certbot HTTPS, Cloudflare DNS only).
 - No Java/Android SDK on mini-pc-6: the APK only builds in GitHub Actions.

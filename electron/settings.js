@@ -86,9 +86,40 @@ window.bidderr.getPrompt().then(({ prompt, defaultPrompt: d }) => {
   $('prompt').value = prompt;
 });
 
+// ---------- updates ----------
+
+let currentVersion = '';
+
+function showUpdate({ state, version, percent }) {
+  const views = {
+    idle: ['Up to date', '', `You have version ${currentVersion}.`, 'Check for updates', false],
+    checking: ['Checking', '', 'Looking for a newer version...', 'Checking...', true],
+    downloading: ['Downloading', 'warn', `Version ${version} is downloading (${percent || 0}%). The Update button appears when it is ready.`, 'Downloading...', true],
+    ready: [`${version} ready`, 'ok', `Version ${version} is ready. Press Update now; Bidderr restarts in a few seconds.`, `Update now to ${version}`, false],
+    latest: ['Up to date', 'ok', `You have the newest version (${currentVersion}).`, 'Check for updates', false],
+    error: ['Offline', 'error', 'Could not reach the update server. Check your internet and try again.', 'Try again', false],
+  };
+  const [pill, kind, text, button, disabled] = views[state] || views.idle;
+  setNote($('update-pill'), pill, kind);
+  $('update-text').textContent = text;
+  $('update-btn').textContent = button;
+  $('update-btn').disabled = disabled;
+  $('update-btn').className = state === 'ready' ? 'btn primary' : 'btn';
+  $('update-card').classList.toggle('highlight', state === 'ready');
+  $('update-btn').dataset.state = state;
+}
+
+$('update-btn').addEventListener('click', () => {
+  if ($('update-btn').dataset.state === 'ready') window.bidderr.installUpdate();
+  else window.bidderr.checkForUpdates();
+});
+window.bidderr.onUpdate(showUpdate);
+
 window.bidderr.getState().then((state) => {
+  currentVersion = state.version;
+  showUpdate(state.update);
   showKey(state);
   $('hotkey-warning').classList.toggle('hidden', state.hotkeyOk);
   $('last').value = state.lastProposal;
-  $('footer').textContent = `Bidderr ${state.version} · updates install automatically`;
+  $('footer').textContent = `Bidderr ${state.version} · one-click updates`;
 });

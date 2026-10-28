@@ -19,7 +19,7 @@ The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and
 - Bidderr lives in the tray, near the clock, and starts with Windows.
 - Use it: select the job post with the mouse (`Ctrl+A` selects the whole page), press **`Ctrl+Shift+1`**,
   wait for the "Proposal ready" message, then paste (`Ctrl+V`). No `Ctrl+C` needed.
-- Updates install by themselves (checked at start and every 3 hours).
+- New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 
 ## 3. Android
 

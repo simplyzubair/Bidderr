@@ -9,6 +9,9 @@ body { padding: 10px; font: 14px/1.35 'Segoe UI Variable', 'Segoe UI', system-ui
 }
 .hud.ok { border-color: rgba(52, 211, 153, 0.6); }
 .hud.error { border-color: rgba(248, 113, 113, 0.6); cursor: pointer; }
+.hud.update { border-color: rgba(52, 211, 153, 0.6); cursor: pointer; }
+.hud.update .icon { background: #34d399; color: #022c22; }
+.hud.update .icon::before { content: '↑'; }
 
 .logo { width: 38px; height: 38px; flex: none; }
 .text { flex: 1; min-width: 0; }
