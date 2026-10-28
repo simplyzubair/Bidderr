@@ -91,7 +91,8 @@ OUTPUT RULES:
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: prompt }] },
         contents: [{ role: 'user', parts: [{ text: `JOB POSTING:\n\n${jobText}` }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
+        // Newer models "think" first and that counts against this limit, so keep it roomy.
+        generationConfig: { temperature: 0.8, maxOutputTokens: 8192 },
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -100,8 +101,14 @@ OUTPUT RULES:
       err.status = res.status;
       throw err;
     }
-    const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
-    if (!text.trim()) throw new Error('Google sent back an empty answer. Try again.');
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const text = parts.filter((p) => !p.thought).map((p) => p.text || '').join('');
+    if (!text.trim()) {
+      // Empty or cut off: let the next model try (status 503 means "try another model").
+      const err = new Error('Google sent back an empty answer. Try again.');
+      err.status = 503;
+      throw err;
+    }
     return text;
   }
 
@@ -113,16 +120,19 @@ OUTPUT RULES:
     if (!apiKey) throw new Error('No API key yet. Open Settings and paste your free Google key.');
     if (job.length < 30) throw new Error('Copy the job posting first (the clipboard text is too short).');
 
+    const isKeyProblem = (e) => e.status === 403 || (e.status === 400 && /api.?key/i.test(e.message));
     let lastError;
     for (const model of models) {
       try {
         return formatProposal(await callGemini(model, apiKey, (prompt || '').trim() || DEFAULT_PROMPT, job.slice(0, 15000), fetchImpl, apiBase));
       } catch (e) {
         lastError = e;
-        if (!RETRY_NEXT_MODEL.has(e.status)) break;
+        // A bad key fails for every model, so stop. Other errors (model missing, busy, out of
+        // free quota, model can't do this request) may work with the next model.
+        if (isKeyProblem(e) || !(RETRY_NEXT_MODEL.has(e.status) || e.status === 400)) break;
       }
     }
-    if (lastError?.status === 400 || lastError?.status === 403) {
+    if (isKeyProblem(lastError)) {
       throw new Error('Google did not accept the API key. Please check it.');
     }
     if (lastError?.status === 429) {

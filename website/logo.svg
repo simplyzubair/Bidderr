@@ -7,17 +7,14 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="116" fill="url(#tile)"/>
-  <g transform="translate(0 -18)">
-    <!-- The B: its stem becomes a pen nib at the bottom. Holes use even-odd fill. -->
-    <path fill="#ffffff" fill-rule="evenodd" d="
-      M168 104 H286 A62 62 0 0 1 286 228 H296 A66 66 0 0 1 296 360 H216
-      C222 390 198 420 183 446 C168 420 144 390 150 360 V122 A18 18 0 0 1 168 104 Z
-      M216 150 H286 A29 29 0 0 1 286 208 H216 Z
-      M216 248 H296 A33 33 0 0 1 296 314 H216 Z
-      M183 371 m-9 0 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 Z
-      M180 386 H186 V436 H180 Z"/>
-    <!-- Ink stroke: the pen is writing. -->
-    <path fill="#ffffff" fill-opacity="0.92"
-      d="M183 446 C250 470 334 452 380 398 C384 393 391 397 388 403 C346 470 254 486 183 446 Z"/>
+  <!-- A bold, legible B with a small pen accent. -->
+  <path fill="#fff" fill-rule="evenodd" d="
+    M122 96h155c85 0 132 43 132 111 0 45-22 76-61 94 52 16 80 54 80 109 0 75-54 114-143 114H122V96zm79 72v108h76c40 0 60-19 60-55s-20-53-60-53h-76zm0 174v110h83c44 0 66-17 66-54 0-38-23-56-68-56h-81z"/>
+  <!-- Separate, simple pen silhouette; the nib points toward the page. -->
+  <g transform="rotate(42 370 348)">
+    <rect x="354" y="274" width="32" height="125" rx="14" fill="#ecfdf5"/>
+    <path d="M354 388h32l-16 42z" fill="#fff"/>
+    <path d="M370 400v23" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round"/>
+    <path d="M355 306h30" stroke="#10b981" stroke-width="5" stroke-linecap="round"/>
   </g>
 </svg>

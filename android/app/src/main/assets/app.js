@@ -145,17 +145,40 @@ function isNewer(latest, current) {
 }
 
 async function checkForUpdate() {
-  if (!installedVersion) return;
+  const button = $('update');
+  const title = $('update-title');
+  const note = $('update-note');
+  if (!installedVersion) {
+    setNote(note, 'Could not read the installed version. Restart the app and try again.', 'error');
+    return;
+  }
+  button.disabled = true;
+  button.textContent = 'Checking...';
+  setNote(note, '', '');
   try {
-    const release = await (await fetch(RELEASES_API)).json();
+    const response = await fetch(RELEASES_API);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const release = await response.json();
     const latest = String(release.tag_name || '').replace(/^v/, '');
     const apk = (release.assets || []).find((a) => a.name.endsWith('.apk'));
-    if (!latest || !apk || !isNewer(latest, installedVersion)) return;
+    if (!latest || !apk) throw new Error('Release APK not found');
+    if (!isNewer(latest, installedVersion)) {
+      updateUrl = '';
+      title.textContent = 'You’re up to date';
+      setNote(note, `Installed version ${installedVersion}. Latest version ${latest}.`, 'ok');
+      button.textContent = 'Check again';
+      return;
+    }
     updateUrl = apk.browser_download_url;
-    $('update-title').textContent = `Update available: ${latest}`;
-    $('update-card').classList.remove('hidden');
+    title.textContent = `Update available: ${latest}`;
+    setNote(note, `Installed version ${installedVersion}.`, '');
+    button.textContent = 'Update now';
   } catch {
-    // Offline: try again next time the app opens.
+    title.textContent = 'Could not check for updates';
+    setNote(note, 'Check your internet connection, then try again.', 'error');
+    button.textContent = 'Try again';
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -170,7 +193,10 @@ window.onUpdateStatus = (state) => {
   setNote($('update-note'), text, kind);
   $('update').disabled = state === 'downloading';
 };
-$('update').addEventListener('click', () => window.Android?.installUpdate(updateUrl));
+$('update').addEventListener('click', () => {
+  if (updateUrl) window.Android?.installUpdate(updateUrl);
+  else checkForUpdate();
+});
 
 // ---------- start ----------
 

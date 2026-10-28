@@ -121,7 +121,7 @@ async function writeProposal({ fromSelection = false } = {}) {
     if (fromSelection) {
       const result = await copySelection();
       job = result.text;
-      log(`[copy] selection copied=${result.copied}, ${job.length} chars`);
+      log(`[copy] selection copied=${result.copied}, ${job.length} chars, ${result.info}`);
     }
     showHud('working', 'Writing your proposal...', 'This takes a few seconds');
     lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt(), apiBase: API_BASE });

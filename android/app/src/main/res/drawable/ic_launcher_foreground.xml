@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The B-pen mark from branding/logo.svg, scaled into the adaptive icon safe zone. -->
+<!-- Matching B + pen mark for Android's adaptive launcher icon. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -14,9 +14,20 @@
         <path
             android:fillColor="#FFFFFFFF"
             android:fillType="evenOdd"
-            android:pathData="M168,104 H286 A62,62 0 0,1 286,228 H296 A66,66 0 0,1 296,360 H216 C222,390 198,420 183,446 C168,420 144,390 150,360 V122 A18,18 0 0,1 168,104 Z M216,150 H286 A29,29 0 0,1 286,208 H216 Z M216,248 H296 A33,33 0 0,1 296,314 H216 Z M174,371 A9,9 0 1,0 192,371 A9,9 0 1,0 174,371 Z M180,386 H186 V436 H180 Z" />
-        <path
-            android:fillColor="#EBFFFFFF"
-            android:pathData="M183,446 C250,470 334,452 380,398 C384,393 391,397 388,403 C346,470 254,486 183,446 Z" />
+            android:pathData="M122,96h155c85,0 132,43 132,111 0,45 -22,76 -61,94 52,16 80,54 80,109 0,75 -54,114 -143,114H122V96z M201,168v108h76c40,0 60,-19 60,-55s-20,-53 -60,-53h-76z M201,342v110h83c44,0 66,-17 66,-54 0,-38 -23,-56 -68,-56h-81z" />
+        <group android:rotation="42" android:pivotX="370" android:pivotY="348">
+            <path
+                android:fillColor="#FFECFDF5"
+                android:pathData="M368,274h4a14,14 0,0 1,14 14v97h-32v-97a14,14 0,0 1,14 -14z" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M354,384h32l-16,46z" />
+            <path
+                android:fillColor="#FF059669"
+                android:pathData="M368,400h4v23h-4z" />
+            <path
+                android:fillColor="#FF10B981"
+                android:pathData="M355,304h30v5h-30z" />
+        </group>
     </group>
 </vector>

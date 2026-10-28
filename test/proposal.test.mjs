@@ -54,6 +54,22 @@ test('generateProposal falls back to the next model on quota errors', async () =
   assert.match(f.calls[1].url, new RegExp(MODELS[1]));
 });
 
+test('generateProposal skips thinking parts and tries the next model on an empty answer', async () => {
+  const thinkingOnly = { body: { candidates: [{ content: { parts: [{ text: 'hmm', thought: true }] } }] } };
+  const mixed = { body: { candidates: [{ content: { parts: [{ text: 'plan', thought: true }, { text: 'Hello,\n\nBest,\nKhan' }] } }] } };
+  const f = fakeFetch([thinkingOnly, mixed]);
+  assert.equal(await generateProposal(JOB, 'KEY', { fetchImpl: f }), 'Hello,\n\nBest,\nKhan');
+  assert.equal(f.calls.length, 2);
+});
+
+test('a 400 that is not about the key tries the next model; a bad key stops at once', async () => {
+  const notKey = fakeFetch([{ status: 400, body: { error: { message: 'Model does not support this' } } }, answer('worked fine')]);
+  assert.equal(await generateProposal(JOB, 'KEY', { fetchImpl: notKey }), 'worked fine');
+  const badKey = fakeFetch([{ status: 400, body: { error: { message: 'API key not valid. Please pass a valid API key.' } } }]);
+  await assert.rejects(generateProposal(JOB, 'KEY', { fetchImpl: badKey }), /did not accept the API key/);
+  assert.equal(badKey.calls.length, 1);
+});
+
 test('checkApiKey reports ok, invalid and offline', async () => {
   const status = (s) => async () => ({ ok: s < 400, status: s });
   assert.equal(await checkApiKey('KEY', { fetchImpl: status(200) }), 'ok');
