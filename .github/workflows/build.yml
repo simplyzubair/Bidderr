@@ -108,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-windows
-          path: ${{ runner.temp }}/bidderr-e2e/*.png
+          path: ${{ runner.temp }}/bidderr-e2e/*
 
   # Real emulator test: share a job, tap the bubble over Chrome.
   e2e-android:

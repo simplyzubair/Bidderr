@@ -125,7 +125,12 @@ function Run-Case([string]$name, [scriptblock]$prepare, [string]$expectJob, [str
   Wait-Log '\[hud\] ok: Proposal copied' 20 $logLines | Write-Host
   Start-Sleep -Milliseconds 300
   Shot $name
-  $clip = Get-Clipboard -Raw
+  $clipboardDeadline = (Get-Date).AddSeconds(3)
+  do {
+    $clip = Get-Clipboard -Raw
+    if ($clip.Contains($BOLD_D) -and $clip.Contains('Best,')) { break }
+    Start-Sleep -Milliseconds 100
+  } while ((Get-Date) -lt $clipboardDeadline)
   if (-not $clip.Contains($BOLD_D) -or -not $clip.Contains('Best,')) { throw "$name - clipboard does not hold the proposal: $clip" }
   $sent = @(Get-Content $mockLog | Select-Object -Skip $mockLines)
   if ($sent.Count -lt 1) { throw "$name - Bidderr never called the API" }
