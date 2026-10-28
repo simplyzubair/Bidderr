@@ -32,11 +32,18 @@ function Press-Hotkey {
 }
 
 function Press-Keys([byte[]]$mods, [byte]$vk) {
-  foreach ($m in $mods) { Key $m $false }
-  Start-Sleep -Milliseconds 50
-  Key $vk $false; Start-Sleep -Milliseconds 75; Key $vk $true
-  Start-Sleep -Milliseconds 50
-  [array]::Reverse($mods); foreach ($m in $mods) { Key $m $true }
+  $prefix = ''
+  if ($mods -contains 0x11) { $prefix += '^' }
+  if ($mods -contains 0x10) { $prefix += '+' }
+  if ($mods -contains 0x12) { $prefix += '%' }
+  $key = switch ($vk) {
+    0x23 { '{END}' }
+    0x41 { 'a' }
+    0x43 { 'c' }
+    default { throw "Unsupported test key: $vk" }
+  }
+  [System.Windows.Forms.SendKeys]::SendWait("$prefix$key")
+  Start-Sleep -Milliseconds 150
 }
 
 # Verify the test app actually received the selection shortcut, then restore the test clipboard
