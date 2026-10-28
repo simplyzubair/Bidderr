@@ -4,3 +4,4 @@ release/
 .env*
 !.env.example
 *.log
+dist-extension/

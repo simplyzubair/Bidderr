@@ -7,6 +7,7 @@ export default function ResponseBox({
   isGenerating,
   onCopy,
   onPaste,
+  onVariant,
   copied
 }) {
   const wordCount = responseText ? responseText.trim().split(/\s+/).length : 0;
@@ -38,6 +39,24 @@ export default function ResponseBox({
           title="Paste response directly into client message / bid box"
         >
           <span>Auto-Paste (Ctrl+V)</span>
+        </button>
+
+        <button
+          className="action-btn-sm btn-secondary"
+          onClick={() => onVariant?.('shorter')}
+          disabled={!responseText || isGenerating}
+          title="Rewrite shorter and punchier"
+        >
+          <span>Shorter</span>
+        </button>
+
+        <button
+          className="action-btn-sm btn-secondary"
+          onClick={() => onVariant?.('different')}
+          disabled={!responseText || isGenerating}
+          title="Write a fresh version with a different opening"
+        >
+          <span>New angle</span>
         </button>
 
         <button

@@ -4,7 +4,7 @@ const zlib = require('zlib');
 
 function createValidPngBuffer(width, height) {
   // Pure JS uncompressed valid PNG generator
-  const signature = Buffer.from([139, 80, 78, 71, 13, 10, 26, 10]);
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
   // IHDR chunk
   const ihdrData = Buffer.alloc(13);

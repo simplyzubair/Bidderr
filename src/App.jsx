@@ -75,7 +75,7 @@ export default function App() {
 
   // Main AI generation runner. `slot` is 'bid' or 'reply' and picks which distinct
   // pipeline (response state, engine settings, generating flag) this call feeds.
-  const handleRunAI = useCallback(async (slot, actionType, textToProcess) => {
+  const handleRunAI = useCallback(async (slot, actionType, textToProcess, variant = '') => {
     const textTarget = textToProcess || capturedText;
     if (!textTarget) {
       return;
@@ -100,6 +100,7 @@ export default function App() {
         },
         clientChatHistory: slot === 'reply' ? (activeClient?.chatHistory || '') : '',
         clientName: slot === 'reply' ? (activeClient?.name || '') : '',
+        variant,
       });
 
       setResponse(output);
@@ -421,6 +422,7 @@ export default function App() {
               isGenerating={isGeneratingBid}
               onCopy={() => handleCopyResponse('bid')}
               onPaste={() => handlePasteResponse('bid')}
+              onVariant={(v) => handleRunAI('bid', 'bid', capturedText, v)}
               copied={bidCopied}
             />
           </div>
@@ -444,6 +446,7 @@ export default function App() {
               isGenerating={isGeneratingChat}
               onCopy={() => handleCopyResponse('reply')}
               onPaste={() => handlePasteResponse('reply')}
+              onVariant={(v) => handleRunAI('reply', 'reply', capturedText, v)}
               copied={chatCopied}
             />
           </div>
