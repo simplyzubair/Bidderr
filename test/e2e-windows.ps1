@@ -18,6 +18,20 @@ Add-Type -Namespace E2E -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
 [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+[DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT rect);
+[DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+public static bool ClickTextArea(IntPtr h) {
+  RECT r;
+  if (!GetWindowRect(h, out r)) return false;
+  int x = r.Left + Math.Min(200, Math.Max(40, (r.Right - r.Left) / 3));
+  int y = r.Top + Math.Min(190, Math.Max(100, (r.Bottom - r.Top) / 3));
+  if (!SetCursorPos(x, y)) return false;
+  mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+  mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+  return true;
+}
 '@
 
 function Key([byte]$vk, [bool]$up) { [E2E.Win]::keybd_event($vk, 0, $(if ($up) { 2 } else { 0 }), [UIntPtr]::Zero) }
@@ -68,7 +82,11 @@ function Focus-Process($proc) {
     [E2E.Win]::ShowWindow($h, 9) | Out-Null
     [E2E.Win]::SetForegroundWindow($h) | Out-Null
     Start-Sleep -Milliseconds 300
-    if ([E2E.Win]::GetForegroundWindow() -eq $h) { return }
+    if ([E2E.Win]::GetForegroundWindow() -eq $h) {
+      if (-not [E2E.Win]::ClickTextArea($h)) { throw "Could not click inside $($proc.ProcessName)" }
+      Start-Sleep -Milliseconds 200
+      return
+    }
   }
   throw "Could not focus $($proc.ProcessName)"
 }
