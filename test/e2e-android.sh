@@ -68,10 +68,17 @@ if ! adb shell pm list packages | grep -q com.android.chrome; then
 fi
 adb shell settings put secure enabled_accessibility_services $PKG/$PKG.BubbleService
 adb shell settings put secure accessibility_enabled 1
+# Starting the app clears Android's stopped-package state and lets the enabled service bind.
+adb shell am start -n $PKG/.MainActivity || fail "start app with bubble enabled"
+for _ in $(seq 1 10); do
+  adb shell dumpsys accessibility > "$OUT/accessibility.txt"
+  if grep -qi "BubbleService" "$OUT/accessibility.txt"; then break; fi
+  sleep 1
+done
+grep -qi "BubbleService" "$OUT/accessibility.txt" || fail "accessibility service did not bind"
 # Skip Chrome's first-run screens.
 adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
 adb shell am set-debug-app --persistent com.android.chrome
-adb shell am force-stop $PKG
 # Serve the job page from the runner; the emulator reaches it as localhost:8765.
 mkdir -p "$OUT/site"
 echo '<html><head><meta name="viewport" content="width=device-width"></head><body><h1>Logo redraw</h1><p>BUBBLE JOB: Hello, my logo is blurry and I need it redrawn as a vector for print. Budget 40 dollars.</p></body></html>' > "$OUT/site/job.html"
