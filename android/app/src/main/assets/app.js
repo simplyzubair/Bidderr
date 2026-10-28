@@ -42,17 +42,80 @@ async function write(jobText) {
     $('result').value = proposal;
     copyText(proposal);
     setStatus('Done! The proposal is copied. Go back and paste it.', 'ok');
+    return true;
   } catch (e) {
     setStatus(e.message, 'error');
     if (!store.key || /API key/.test(e.message)) showKeyCard(true);
+    return false;
   } finally {
     busy = false;
     document.querySelectorAll('button').forEach((b) => { b.disabled = false; });
   }
 }
 
-// Called by MainActivity when text comes from "Write proposal" or Share.
-window.onJobText = (text) => write(text);
+// Called by MainActivity when text comes from the bubble, "Write proposal" or Share.
+// From the bubble, go straight back to the job page once the proposal is copied.
+window.onJobText = async (text, fromBubble) => {
+  const ok = await write(text);
+  if (ok && fromBubble && window.Android) setTimeout(() => window.Android.backToJob(), 700);
+};
+
+// ---------- floating bubble ----------
+
+function refreshBubbleCard() {
+  const supported = Boolean(window.Android?.isBubbleOn);
+  $('bubble-card').classList.toggle('hidden', !supported || window.Android.isBubbleOn());
+}
+$('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
+window.onAppResumed = refreshBubbleCard;
+
+// ---------- updates (newest release on GitHub) ----------
+
+const RELEASES_API = 'https://api.github.com/repos/simplyzubair/Bidderr/releases/latest';
+const installedVersion = window.Android?.version ? window.Android.version() : '';
+let updateUrl = '';
+
+function isNewer(latest, current) {
+  const a = latest.split('.').map(Number);
+  const b = current.split('.').map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  if (!installedVersion) return;
+  try {
+    const release = await (await fetch(RELEASES_API)).json();
+    const latest = String(release.tag_name || '').replace(/^v/, '');
+    const apk = (release.assets || []).find((a) => a.name.endsWith('.apk'));
+    if (!latest || !apk || !isNewer(latest, installedVersion)) return;
+    updateUrl = apk.browser_download_url;
+    $('update-title').textContent = `Update available: version ${latest}`;
+    $('update-card').classList.remove('hidden');
+  } catch {
+    // Offline: try again next time the app opens.
+  }
+}
+
+window.onUpdateStatus = (state) => {
+  const messages = {
+    downloading: ['Downloading the update...', ''],
+    started: ['Tap Install on the next screen.', 'ok'],
+    needs_permission: ['Turn on "Allow from this source", come back, then tap Update now again.', ''],
+    failed: ['The update did not download. Check your internet and try again.', 'error'],
+  };
+  const [text, kind] = messages[state] || ['', ''];
+  $('update-status').textContent = text;
+  $('update-status').className = `status ${kind}`;
+  $('update').disabled = state === 'downloading';
+};
+$('update').addEventListener('click', () => window.Android?.installUpdate(updateUrl));
+
+$('version').textContent = installedVersion ? `Bidderr ${installedVersion}` : '';
+refreshBubbleCard();
+checkForUpdate();
 
 $('paste-write').addEventListener('click', async () => write(await readClipboard()));
 $('write').addEventListener('click', () => write($('job').value));

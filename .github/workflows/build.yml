@@ -1,14 +1,32 @@
-name: Build Bidderr
+name: Build and Release Bidderr
 
+# Every push to main that changes the app becomes a release v2.0.<run number>.
+# Installed apps (Windows and Android) see the new release and update themselves.
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'website/**']
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      build: ${{ steps.v.outputs.build }}
+    steps:
+      - id: v
+        run: |
+          echo "version=2.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "build=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_OUTPUT"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +37,7 @@ jobs:
       - run: npm test
 
   android:
-    needs: test
+    needs: [version, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,15 +48,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - run: gradle -p android assembleDebug --no-daemon
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Bidderr.apk
+      - name: Build signed APK
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/bidderr-release.p12"
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$ANDROID_KEYSTORE_FILE"
+          gradle -p android assembleRelease --no-daemon \
+            -PappVersion=${{ needs.version.outputs.version }} -PappBuild=${{ needs.version.outputs.build }}
+          rm -f "$ANDROID_KEYSTORE_FILE"
+          cp android/app/build/outputs/apk/release/app-release.apk Bidderr.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
           path: Bidderr.apk
 
   windows:
-    needs: test
+    needs: [version, test]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,15 +73,18 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npx electron-builder --win --publish never
+      - shell: bash
+        run: npx electron-builder --win --publish never "-c.extraMetadata.version=${{ needs.version.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/Bidderr-Setup.exe
+          path: |
+            release/Bidderr-Setup.exe
+            release/Bidderr-Setup.exe.blockmap
+            release/latest.yml
 
-  # Puts the newest Bidderr.apk and Bidderr-Setup.exe on the "latest" release page.
   release:
-    needs: [android, windows]
+    needs: [version, android, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,6 +95,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          VERSION: v${{ needs.version.outputs.version }}
         run: |
-          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Bidderr (latest build)" --notes "Newest Windows installer and Android app, built automatically from main."
-          gh release upload latest Bidderr.apk Bidderr-Setup.exe --clobber
+          gh release create "$VERSION" --target "${{ github.sha }}" --title "Bidderr $VERSION" --generate-notes \
+            Bidderr.apk Bidderr-Setup.exe Bidderr-Setup.exe.blockmap latest.yml

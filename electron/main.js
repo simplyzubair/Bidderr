@@ -3,7 +3,9 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, Notification, safeStorage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 const { generateProposal, DEFAULT_PROMPT } = require('../shared/proposal.js');
+const { copySelection, startHelper, stopHelper } = require('./copySelection.js');
 
 const HOTKEY = 'CommandOrControl+Shift+1';
 const ICON = path.join(__dirname, '../public/icon.png');
@@ -27,7 +29,8 @@ function loadSettings() {
 
 function getApiKey() {
   const { apiKey } = loadSettings();
-  if (!apiKey) return '';
+  // Developer runs (npm start) can use a key saved on this PC instead of the Settings window.
+  if (!apiKey) return app.isPackaged ? '' : process.env.BIDDERR_API_KEY || '';
   try {
     return safeStorage.decryptString(Buffer.from(apiKey, 'base64'));
   } catch {
@@ -53,16 +56,19 @@ function notify(title, body) {
 }
 
 function setStatus(text) {
+  if (!app.isPackaged) console.log(`[status] ${text}`);
   tray?.setToolTip(`Bidderr - ${text}`);
   settingsWindow?.webContents.send('status', { text, lastProposal });
 }
 
-async function writeProposalFromClipboard() {
+// From the hotkey: copy the selected job text first. From the tray or window: use the clipboard.
+async function writeProposal({ fromSelection = false } = {}) {
   if (busy) return;
   busy = true;
   setStatus('writing proposal...');
   try {
-    lastProposal = await generateProposal(clipboard.readText(), getApiKey(), { prompt: getPrompt() });
+    const job = fromSelection ? await copySelection() : clipboard.readText();
+    lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt() });
     clipboard.writeText(lastProposal);
     setStatus('proposal copied. Press Ctrl+V to paste.');
     notify('Proposal ready', 'Copied to clipboard. Press Ctrl+V to paste it.');
@@ -71,7 +77,31 @@ async function writeProposalFromClipboard() {
     notify('Bidderr could not write the proposal', e.message);
   } finally {
     busy = false;
+    if (updateReady) installUpdate();
   }
+}
+
+// ---------- automatic updates (from the GitHub "latest" release) ----------
+
+let updateReady = false;
+
+function installUpdate() {
+  if (busy) return; // never restart in the middle of writing a proposal
+  autoUpdater.quitAndInstall(true, true); // silent install, then start Bidderr again
+}
+
+function setupAutoUpdates() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.on('update-downloaded', ({ version }) => {
+    updateReady = true;
+    notify('Bidderr is updating', `Installing version ${version}. It restarts by itself in a few seconds.`);
+    setTimeout(installUpdate, 5000);
+  });
+  autoUpdater.on('error', () => {}); // offline or GitHub down: just try again later
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 3 * 60 * 60 * 1000);
 }
 
 // ---------- windows and tray ----------
@@ -109,7 +139,8 @@ function openSettings() {
 
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
-    { label: 'Write proposal from clipboard (Ctrl+Shift+1)', click: writeProposalFromClipboard },
+    { label: `Bidderr ${app.getVersion()}`, enabled: false },
+    { label: 'Write proposal from clipboard', click: () => writeProposal() },
     { label: 'Settings', click: openSettings },
     {
       label: 'Start with Windows',
@@ -127,7 +158,7 @@ ipcMain.handle('save-key', (_e, key) => {
   saveApiKey(String(key || '').trim());
   return Boolean(getApiKey());
 });
-ipcMain.handle('write-now', () => writeProposalFromClipboard());
+ipcMain.handle('write-now', () => writeProposal());
 ipcMain.handle('get-prompt', () => ({ prompt: getPrompt(), defaultPrompt: DEFAULT_PROMPT }));
 ipcMain.handle('save-prompt', (_e, prompt) => {
   const text = String(prompt || '').trim().slice(0, 20000);
@@ -143,17 +174,29 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     app.setAppUserModelId('com.bidderr.app');
     tray = new Tray(ICON);
-    tray.setToolTip('Bidderr - copy a job, press Ctrl+Shift+1');
+    tray.setToolTip('Bidderr - select a job, press Ctrl+Shift+1');
     tray.setContextMenu(buildTrayMenu());
     tray.on('click', openSettings);
 
-    if (!globalShortcut.register(HOTKEY, writeProposalFromClipboard)) {
+    if (!globalShortcut.register(HOTKEY, () => writeProposal({ fromSelection: true }))) {
       notify('Bidderr', 'Ctrl+Shift+1 is used by another app. Use the tray menu instead.');
     }
     if (!getApiKey()) openSettings();
+
+    // First run of the installed app: start with Windows (can be turned off in the tray menu).
+    if (app.isPackaged && !loadSettings().startupSet) {
+      app.setLoginItemSettings({ openAtLogin: true });
+      saveSettings({ startupSet: true });
+    }
+    tray.setContextMenu(buildTrayMenu());
+    startHelper();
+    setupAutoUpdates();
   });
 
   // Keep running in the tray when the settings window is closed.
   app.on('window-all-closed', () => {});
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    stopHelper();
+  });
 }

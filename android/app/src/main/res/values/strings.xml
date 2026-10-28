@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_description">Shows a green B bubble on job pages in your browser or the Upwork app. When you tap it, Bidderr reads the job text on the screen and writes a proposal. Bidderr reads the screen only when you tap the bubble, and the text goes only to Google Gemini with your own API key.</string>
+</resources>

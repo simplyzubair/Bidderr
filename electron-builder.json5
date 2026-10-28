@@ -9,6 +9,8 @@
     "shared/**/*",
     "public/icon.png"
   ],
+  // Where installed apps look for updates (electron-updater).
+  "publish": [{ "provider": "github", "owner": "simplyzubair", "repo": "Bidderr" }],
   "win": {
     "icon": "public/icon.png",
     "target": [{ "target": "nsis", "arch": ["x64"] }]

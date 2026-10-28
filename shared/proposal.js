@@ -14,6 +14,8 @@
   // The default prompt. The user can replace it in the app (Edit prompt); this is the "Reset" value.
   const DEFAULT_PROMPT = `You write Upwork / PeoplePerHour proposals for a freelancer named Khan.
 Read the job posting and write a proposal with exactly these 5 sections, in this order.
+The text you get may include other things from the web page (menus, buttons, ads, other jobs, the client's
+history). Ignore all of that and use only the main job posting.
 Sections 2 and 4 are one short paragraph each, written like a real human: short sentences, easy English.
 
 SECTION 1 (greeting):

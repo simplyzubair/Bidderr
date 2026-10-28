@@ -3,13 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://generativelanguage.googleapis.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://generativelanguage.googleapis.com https://api.github.com">
   <title>Bidderr</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <h1>Bid<span>derr</span></h1>
-  <p class="tagline">Copy a job. Tap once. Paste a winning proposal.</p>
+  <p class="tagline">Open a job. Tap the B. Paste a winning proposal.</p>
+
+  <div id="update-card" class="card hidden">
+    <h2 id="update-title">Update available</h2>
+    <p id="update-status" class="status"></p>
+    <button id="update" class="primary big">Update now</button>
+  </div>
+
+  <div id="bubble-card" class="card hidden">
+    <h2>Turn on the floating B bubble</h2>
+    <p>The green <strong>B</strong> floats over job pages in Chrome and the Upwork app. Tap it and Bidderr reads the job by itself. No selecting, no copying.</p>
+    <ol>
+      <li>Tap <strong>Open settings</strong> below.</li>
+      <li>Find <strong>Bidderr bubble</strong> (maybe under "Installed apps") and turn it on.</li>
+      <li>If it is greyed out: go to Settings, Apps, Bidderr, tap the <strong>⋮</strong> menu (top right), then <strong>Allow restricted settings</strong>. Then try step 2 again.</li>
+    </ol>
+    <div class="row"><button id="bubble-settings" class="primary">Open settings</button></div>
+  </div>
 
   <div id="key-card" class="card">
     <h2>Free Google API key</h2>
@@ -53,12 +70,15 @@
   <details class="card">
     <summary><strong>Tips</strong></summary>
     <ol>
-      <li>In Chrome or the Upwork app, select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share → Bidderr</strong>).</li>
-      <li>The proposal is copied for you. Go back and paste it.</li>
+      <li>Open a job post and tap the green <strong>B</strong>. You come back to the job with the proposal copied. Tap the proposal box and paste.</li>
+      <li>Drag the <strong>B</strong> to move it out of the way.</li>
+      <li>No bubble? Select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share → Bidderr</strong>).</li>
       <li>To change your API key, open this app and tap <strong>Change API key</strong> below.</li>
     </ol>
     <div class="row"><button id="change-key">Change API key</button></div>
   </details>
+
+  <p id="version" class="tagline"></p>
 
   <script src="proposal.js"></script>
   <script src="app.js"></script>

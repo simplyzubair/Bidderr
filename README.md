@@ -1,7 +1,9 @@
 # Bidderr
 
-Copy a job posting, press one key, paste a ready proposal.
+Select a job post, press one key (or tap one bubble), paste a ready proposal.
 It uses Google Gemini through a **free** API key.
+
+Download: **https://bidderr.skillsgeek.com**
 
 ## 1. Get your free Google API key (one time)
 
@@ -13,20 +15,19 @@ The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and
 
 ## 2. Windows
 
-- Install: run `Bidderr-Setup.exe` (from the `latest` release on GitHub).
-  Windows may say "Windows protected your PC". Click **More info → Run anyway** (the app is not code-signed).
-- Bidderr lives in the tray, near the clock.
-- Use it: copy a job posting (`Ctrl+C`), press **`Ctrl+Shift+1`**, wait a few seconds, then paste (`Ctrl+V`).
-- Right-click the tray icon for Settings, "Start with Windows" and Quit.
+- Install `Bidderr-Setup.exe`. If Windows warns you, click **More info → Run anyway** (the app is not code-signed).
+- Bidderr lives in the tray, near the clock, and starts with Windows.
+- Use it: select the job post with the mouse (`Ctrl+A` selects the whole page), press **`Ctrl+Shift+1`**,
+  wait for the "Proposal ready" message, then paste (`Ctrl+V`). No `Ctrl+C` needed.
+- Updates install by themselves (checked at start and every 3 hours).
 
 ## 3. Android
 
-- Install: download `Bidderr.apk` from the `latest` release on your phone and open it.
-  Allow "install unknown apps" for your browser when Android asks.
-- Use it either way:
-  - Open Bidderr and tap **Paste job & write proposal**, or
-  - Select the job text in Chrome or the Upwork app, then tap **Write proposal** in the text menu (or **Share → Bidderr**).
-- The proposal is copied automatically. Paste it into the proposal box.
+- Install `Bidderr.apk`. Allow "install unknown apps" when Android asks.
+- Turn on the **floating B bubble** (the app shows the steps). Then open a job in Chrome or the Upwork app,
+  tap **B**, and you come back to the job with the proposal copied. Tap the proposal box and paste.
+- Without the bubble: select the job text, tap **Write proposal** in the text menu (or **Share → Bidderr**).
+- When an update is out, the app shows **Update now**.
 
 ## Edit the prompt
 
@@ -35,8 +36,13 @@ Both apps have an **Edit prompt (admin)** section. Change the text, press **Save
 
 ## For developers
 
-- `shared/proposal.js` is the engine (prompt, Gemini call, formatting). It is used by both apps.
-- `electron/` is the Windows tray app. `android/` is the Android app (a WebView showing `assets/index.html`).
-- `npm test` runs the tests. `npm start` runs the Windows app. `npm run build:exe` builds the installer.
-- On every push to `main`, GitHub Actions builds the APK and the installer and puts them on the `latest` release.
-- Models are tried in order (see `MODELS` in `shared/proposal.js`). If one is missing or out of free quota, the next one is used.
+- `shared/proposal.js` is the engine (prompt, Gemini call, formatting). Both apps use it.
+- `electron/` is the Windows tray app. `android/` is the Android app: a WebView showing `assets/index.html`,
+  plus `BubbleService` (accessibility service that draws the bubble and reads the screen text when tapped).
+- `website/` is the download page, served by host nginx on Contabo from `/var/www/bidderr`.
+  Deploy changes with `bash scripts/deploy-website.sh`.
+- `npm test` runs the tests. `npm start` runs the Windows app (it can use the `BIDDERR_API_KEY` env var).
+- Every push to `main` (except `*.md` and `website/`) builds and publishes release `v2.0.<run number>`.
+  Installed apps update from it.
+- Android signing key: GitHub secrets `ANDROID_KEYSTORE_B64` / `ANDROID_KEYSTORE_PASSWORD`,
+  backups in `D:\Backups\bidderr-signing` and NAS `~/Backups/bidderr-signing`. Never lose it: phones can't update without it.
