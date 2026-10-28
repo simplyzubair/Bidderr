@@ -4,6 +4,9 @@
 # Both must open Bidderr with the job text. With no API key the app must say so clearly.
 # Screenshots and UI dumps go to $OUT.
 set -uo pipefail
+# The emulator runner can hang while waiting for its Crashpad child processes to exit.
+# Stop them when the test script exits so the action can finish its emulator teardown.
+trap 'pkill -TERM -x crashpad_handler 2>/dev/null || true; sleep 2; pkill -KILL -x crashpad_handler 2>/dev/null || true' EXIT
 # Prevent a wedged adb shell/uiautomator call from holding the CI job open.
 adb() { command timeout 20s adb "$@"; }
 APK="${1:-Bidderr.apk}"
