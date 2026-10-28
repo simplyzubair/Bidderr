@@ -4,15 +4,17 @@
 # Both must open Bidderr with the job text. With no API key the app must say so clearly.
 # Screenshots and UI dumps go to $OUT.
 set -uo pipefail
-# Shut down the emulator before the action's own cleanup; adb emu kill can hang on this image.
-# The job runner is isolated to this single emulator, so stop any remaining emulator children too.
+# The emulator action can hang while its shutdown waits for emulator child processes.
+# Start a detached fallback that stops those children if the action is still stuck.
 cleanup_emulator() {
-  timeout 5s adb -s emulator-5554 emu kill >/dev/null 2>&1 || true
-  pkill -TERM -x qemu-system-x86_64 2>/dev/null || true
-  pkill -TERM -x crashpad_handler 2>/dev/null || true
-  sleep 2
-  pkill -KILL -x qemu-system-x86_64 2>/dev/null || true
-  pkill -KILL -x crashpad_handler 2>/dev/null || true
+  (
+    sleep 10
+    pkill -TERM -x qemu-system-x86_64 2>/dev/null || true
+    pkill -TERM -x crashpad_handler 2>/dev/null || true
+    sleep 2
+    pkill -KILL -x qemu-system-x86_64 2>/dev/null || true
+    pkill -KILL -x crashpad_handler 2>/dev/null || true
+  ) </dev/null >/dev/null 2>&1 &
 }
 trap cleanup_emulator EXIT
 # Prevent a wedged adb shell/uiautomator call from holding the CI job open.
@@ -87,6 +89,8 @@ echo '<html><head><meta name="viewport" content="width=device-width"></head><bod
 (cd "$OUT/site" && python3 -m http.server 8765 >/dev/null 2>&1 &)
 adb reverse tcp:8765 tcp:8765
 sleep 1
+# Skip Chrome's first-run pages on the fresh emulator to keep this test focused on the bubble.
+adb shell "echo 'chrome --disable-fre --no-default-browser-check --no-first-run' > /data/local/tmp/chrome-command-line"
 # Clear Chrome's first-run prompt before enabling the accessibility service. UIAutomator's
 # temporary automation connection unbinds accessibility services, so don't use it afterward
 # until the bubble has been tapped.
