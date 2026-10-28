@@ -53,6 +53,7 @@ else:
 PY
   ) || return 1
   read -r x y <<< "$coords"
+  echo "Tapping '$needle' at $x,$y"
   adb shell input tap "$x" "$y"
 }
 # Wait until the screen shows some text (WebView text shows up in the UI dump).
@@ -96,19 +97,20 @@ adb shell "echo 'chrome --disable-fre --no-default-browser-check --no-first-run'
 # until the bubble has been tapped.
 adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main \
   -d "http://localhost:8765/job.html" || fail "open chrome"
-for _ in $(seq 1 5); do
+sleep 3
+for _ in $(seq 1 15); do
   dump 2-chrome
   if grep -q "BUBBLE JOB" "$OUT/2-chrome.xml"; then break; fi
   if tap_text "No thanks" "$OUT/2-chrome.xml"; then
-    sleep 1
+    sleep 2
     continue
   fi
   if tap_text "Use without an account" "$OUT/2-chrome.xml"; then
-    sleep 1
+    sleep 2
     continue
   fi
   if tap_text "Accept & continue" "$OUT/2-chrome.xml"; then
-    sleep 1
+    sleep 2
     continue
   fi
   break
