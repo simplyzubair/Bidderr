@@ -180,12 +180,16 @@ try {
   $page = Join-Path $work 'job.html'
   Set-Content $page '<html><body><h1>Logo redraw</h1><p>CHROME JOB: Hello, I am Sarah. My logo is blurry and I need it redrawn as a vector for print. Budget $40.</p></body></html>'
   $chrome = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
-  $chromeProc = Start-Process $chrome -ArgumentList '--no-first-run', '--no-default-browser-check', "--user-data-dir=$work\chrome", '--new-window', "file:///$($page -replace '\\','/')" -PassThru
-  $procs += $chromeProc
+  # A fresh runner sometimes starts Chrome slowly: wait up to 60s, and launch again once if needed.
   $chromeWin = $null
-  for ($i = 0; $i -lt 60 -and -not $chromeWin; $i++) {
-    $chromeWin = Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
-    if (-not $chromeWin) { Start-Sleep -Milliseconds 500 }
+  for ($attempt = 1; $attempt -le 2 -and -not $chromeWin; $attempt++) {
+    Write-Host "Starting Chrome (attempt $attempt)"
+    $procs += Start-Process $chrome -ArgumentList '--no-first-run', '--no-default-browser-check', '--disable-gpu', "--user-data-dir=$work\chrome", '--new-window', "file:///$($page -replace '\\','/')" -PassThru
+    for ($i = 0; $i -lt 120 -and -not $chromeWin; $i++) {
+      $chromeWin = Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+      if (-not $chromeWin) { Start-Sleep -Milliseconds 500 }
+    }
+    if (-not $chromeWin) { Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
   }
   if (-not $chromeWin) { throw 'Chrome did not create a desktop window' }
   Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB' } 'CHROME JOB' 'true'
