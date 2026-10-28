@@ -19,8 +19,7 @@ fail() {
 shot() { adb exec-out screencap -p > "$OUT/$1.png" || true; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml > "$OUT/$1.xml" 2>/dev/null || true; }
 tap_text() {
-  local needle="$1" xml="$OUT/current.xml" coords
-  dump current
+  local needle="$1" xml="$2" coords
   coords=$(python3 - "$xml" "$needle" <<'PY'
 import re
 import sys
@@ -85,8 +84,19 @@ adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.googl
 for _ in $(seq 1 5); do
   dump 2-chrome
   if grep -q "BUBBLE JOB" "$OUT/2-chrome.xml"; then break; fi
-  tap_text "No thanks" || break
-  sleep 1
+  if tap_text "No thanks" "$OUT/2-chrome.xml"; then
+    sleep 1
+    continue
+  fi
+  if tap_text "Use without an account" "$OUT/2-chrome.xml"; then
+    sleep 1
+    continue
+  fi
+  if tap_text "Accept & continue" "$OUT/2-chrome.xml"; then
+    sleep 1
+    continue
+  fi
+  break
 done
 wait_for_text "BUBBLE JOB" 2-chrome || fail "chrome did not show the job page"
 shot 2-chrome-ready
