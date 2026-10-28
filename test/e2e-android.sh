@@ -4,6 +4,8 @@
 # Both must open Bidderr with the job text. With no API key the app must say so clearly.
 # Screenshots and UI dumps go to $OUT.
 set -uo pipefail
+# Prevent a wedged adb shell/uiautomator call from holding the CI job open.
+adb() { command timeout 20s adb "$@"; }
 APK="${1:-Bidderr.apk}"
 OUT="${OUT:-e2e-android}"
 mkdir -p "$OUT"
