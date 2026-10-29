@@ -40,11 +40,11 @@ window.startWriting = async (text) => {
     sound('done');
     android?.bubble('ready', proposal);
     const hint = android?.isBubbleOn() ? 'Tap the proposal box, then the Paste bubble' : 'Long-press the proposal box, then Paste';
-    show('paste', 'Proposal copied', hint);
+    show('paste', 'Proposal ready', `Copied. ${hint}`);
     closeIn(3500);
   } catch (e) {
     android?.bubble('idle', '');
-    show('error', 'Could not write it', e.message);
+    show('error', 'Proposal not ready', `${e.message}. No new proposal was copied; check the message before pasting.`);
     closeIn(10000);
   }
 };

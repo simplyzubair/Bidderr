@@ -187,6 +187,11 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
   if (busy) return;
   busy = true;
   log(`[action] write proposal (fromSelection=${fromSelection})`);
+  settingsWindow?.webContents.send('status', {
+    kind: 'working',
+    text: 'Writing proposal… wait for “Proposal ready” before pasting.',
+    lastProposal,
+  });
   try {
     if (!getApiKey()) throw new Error('No API key yet. Click here to add your free Google key.');
     showBubble('writing', 'Writing proposal...', 'Reading the job', { sound: 'writing', at });
@@ -199,13 +204,15 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
     showBubble('writing', 'Writing proposal...', 'A few seconds');
     lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt(), apiBase: API_BASE });
     clipboard.writeText(lastProposal);
-    settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Proposal copied', lastProposal });
+    settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Proposal ready. It is copied—paste it into the job form.', lastProposal });
     showBubble('paste', 'Paste proposal', 'Click the proposal box, then here', { sound: 'done' });
+    showHud('ok', 'Proposal ready to paste', 'Your proposal is copied. Paste it into the job form.');
   } catch (e) {
-    settingsWindow?.webContents.send('status', { kind: 'error', text: e.message, lastProposal });
-    showBubble('error', 'Could not write it', e.message);
+    const detail = `${e.message}\nNo new proposal was copied. Check this message before pasting.`;
+    settingsWindow?.webContents.send('status', { kind: 'error', text: detail, lastProposal });
+    showBubble('error', 'Proposal not ready', e.message);
     // The bubble is icon-only, so the reason goes in the corner box too.
-    showHud('error', 'Could not write the proposal', e.message);
+    showHud('error', 'Could not write the proposal', detail);
     if (/API key/.test(e.message)) openSettings();
   } finally {
     busy = false;

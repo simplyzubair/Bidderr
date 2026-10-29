@@ -26,8 +26,9 @@ async function readClipboard() {
 function showKey() {
   const has = Boolean(store.key);
   setNote($('key-pill'), has ? maskKey(store.key) : 'No key', has ? 'ok' : 'error');
-  setNote($('ready-pill'), has ? 'Ready' : 'Add API key', has ? 'ok' : 'warn');
+  setNote($('ready-pill'), has ? 'Ready' : 'Setup needed', has ? 'ok' : 'warn');
   if (!has) $('key-card').open = true;
+  $('key-card').classList.toggle('highlight', !has);
 }
 
 $('toggle-key').addEventListener('click', () => {
@@ -53,6 +54,7 @@ $('save-key').addEventListener('click', async () => {
   store.key = key;
   $('key').value = '';
   showKey();
+  $('key-card').open = false;
   if (check === 'offline') {
     setNote($('key-note'), `Saved (${maskKey(key)}), but Google could not be reached to test it.`, 'warn');
     toast('Key saved (not tested, no internet)', 'warn');
@@ -68,20 +70,23 @@ let busy = false;
 async function write(jobText) {
   if (busy) return false;
   busy = true;
-  const done = busyButton($('paste-write'), 'Writing your proposal...');
-  setNote($('status'), '');
+  const done = busyButton($('paste-write'), 'Writing proposal…');
+  setNote($('status'), 'Writing… wait for “Proposal ready” before pasting.', 'working');
   try {
-    $('job').value = jobText;
-    const proposal = await generateProposal(jobText, store.key, { prompt: store.prompt });
+    const job = String(jobText || '').trim();
+    if (!job && store.key) throw new Error('No job post found in the clipboard. Copy the job post first, then try again.');
+    $('job').value = job;
+    const proposal = await generateProposal(job, store.key, { prompt: store.prompt });
     $('result').value = proposal;
     copyText(proposal);
-    setNote($('status'), 'Done! Proposal copied. Go back and paste it.', 'ok');
+    setNote($('status'), 'Proposal ready. It is copied—return to the job and paste it.', 'ok');
     toast('Proposal copied');
     return true;
   } catch (e) {
-    setNote($('status'), e.message, 'error');
-    toast(e.message, 'error');
-    if (!store.key || /API key/.test(e.message)) $('key-card').open = true;
+    const message = String(e?.message || 'Unknown error').trim();
+    setNote($('status'), `Could not create a proposal: ${message}\nNo new proposal was copied. Check this message before pasting.`, 'error');
+    toast(message, 'error');
+    if (!store.key || /API key/i.test(message)) $('key-card').open = true;
     return false;
   } finally {
     busy = false;

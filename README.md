@@ -5,21 +5,21 @@ It uses Google Gemini through a **free** API key.
 
 Download: **https://bidderr.skillsgeek.com**
 
-## 1. Get your free Google API key (one time)
+## 1. Get your free Google API key (once per device)
 
 1. Open https://aistudio.google.com/apikey and sign in with Google.
 2. Click **Create API key**, then copy it.
 3. Paste it into Bidderr (Windows: Settings window, Android: the key box) and press **Save**.
 
-The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and try again.
+The key is saved on this device only, so set it up separately on each computer or phone. The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and try again.
 
 ## 2. Windows
 
 - Install `Bidderr-Setup.exe`. If Windows warns you, click **More info → Run anyway** (the app is not code-signed).
 - Bidderr lives in the tray, near the clock, and starts with Windows.
 - Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). The round **Bidderr bubble**
-  pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Sound 1 = writing.
-  Sound 2 = copied, and the bubble gets a paste badge: click the proposal box, then the bubble.
+  pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Wait for the green paste badge,
+  then click the proposal box and the bubble. Bidderr copies the ready proposal again just before pasting.
   The selection bubble can be turned off in the window or the tray menu.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 
@@ -27,15 +27,15 @@ The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and
 
 - Install `Bidderr.apk`. Allow "install unknown apps" when Android asks.
 - Select the job text in Chrome or the Upwork app and tap **✍ Write proposal** in the text menu.
-  Only a small bubble shows at the bottom (the app does not open): sound 1 = writing, sound 2 = copied.
-  Long-press the proposal box and tap Paste.
+  Only a small bubble shows at the bottom (the app does not open): sound 1 = writing, sound 2 = proposal ready.
+  Wait for the ready message, return to the job, then paste.
 - Optional **B bubble** (Accessibility; the app shows the steps): tap B on a job page to write without
   selecting. When ready it turns into a green **Paste** button that pastes into the box you tapped.
 - When an update is out, the app shows **Update now**.
 
 ## Edit the prompt
 
-Both apps have an **Edit prompt (admin)** section. Change the text, press **Save prompt**.
+Both apps have an **Advanced: writing instructions** section. Change the text, press **Save prompt**.
 **Reset to default** brings back the built-in prompt (in `shared/proposal.js`).
 
 ## For developers

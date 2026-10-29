@@ -3,7 +3,8 @@ const { toast, setNote, busyButton } = window.ui;
 
 function showKey({ hasKey, maskedKey }) {
   setNote($('key-pill'), hasKey ? `Saved: ${maskedKey}` : 'No key', hasKey ? 'ok' : 'error');
-  setNote($('ready-pill'), hasKey ? 'Ready' : 'Add API key', hasKey ? 'ok' : 'warn');
+  setNote($('ready-pill'), hasKey ? 'Ready' : 'Setup needed', hasKey ? 'ok' : 'warn');
+  $('key-card').open = !hasKey;
   $('key-card').classList.toggle('highlight', !hasKey);
 }
 
@@ -53,8 +54,17 @@ $('key').addEventListener('keydown', (e) => {
 // ---------- proposals ----------
 
 function showStatus({ kind, text, lastProposal }) {
-  setNote($('status'), text, kind === 'working' ? '' : kind);
-  $('write').disabled = kind === 'working';
+  setNote($('status'), text, kind);
+  const working = kind === 'working';
+  $('write').disabled = working;
+  $('write').setAttribute('aria-busy', String(working));
+  if (working) {
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    $('write').replaceChildren(spinner, document.createTextNode('Writing proposal…'));
+  } else {
+    $('write').textContent = 'Write from copied job';
+  }
   if (lastProposal) $('last').value = lastProposal;
 }
 window.bidderr.onStatus(showStatus);

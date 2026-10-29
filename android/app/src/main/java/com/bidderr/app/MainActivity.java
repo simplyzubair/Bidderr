@@ -199,7 +199,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void backToJob() {
             runOnUiThread(() -> {
-                Toast.makeText(MainActivity.this, "Proposal copied. Tap the box and paste.", Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this, "Proposal ready and copied. Return to the job and paste it.", Toast.LENGTH_LONG).show();
                 moveTaskToBack(true);
             });
         }

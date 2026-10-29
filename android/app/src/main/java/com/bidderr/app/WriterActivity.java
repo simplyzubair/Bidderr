@@ -24,7 +24,7 @@ import org.json.JSONObject;
 /**
  * The floating writer. Opened by "Write proposal" in Android's text-selection menu (or by the
  * B bubble). It shows only a small bubble at the bottom of the screen, over the job page:
- * "Writing proposal..." (sound 1) -> "Proposal copied" (sound 2), then closes by itself.
+ * "Writing proposal..." (sound 1) -> "Proposal ready" (sound 2), then closes by itself.
  * The work is done by assets/writer.html with the shared proposal engine.
  */
 public class WriterActivity extends Activity {
