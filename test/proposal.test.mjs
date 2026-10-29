@@ -38,7 +38,7 @@ test('generateProposal sends the prompt and job to Gemini', async () => {
   assert.equal(f.calls[0].key, 'KEY');
   assert.match(f.calls[0].body.systemInstruction.parts[0].text, /Offer Summary/);
   assert.match(f.calls[0].body.contents[0].parts[0].text, /blurry logo/);
-  assert.equal(f.calls[0].body.generationConfig.thinkingConfig, undefined);
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'minimal');
 });
 
 test('generateProposal disables thinking on 2.5 models for immediate generation', async () => {
