@@ -136,7 +136,7 @@ ${pen}
   await png(tile, 'public/icon.png', 256);
   await png(tile, 'public/tray.png', 32);
   await png(tile, 'website/icon.png', 256);
-  await png(round, 'shared/img/mark.png', 128); // bubbles in the Android pages
+  await png(round, 'android/app/src/main/assets/img/mark.png', 128); // bubbles in the Android pages
   for (const [dir, size] of [['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi', 144], ['xxxhdpi', 192]]) {
     await png(tile, `android/app/src/main/res/mipmap-${dir}/ic_launcher.png`, size);
   }
