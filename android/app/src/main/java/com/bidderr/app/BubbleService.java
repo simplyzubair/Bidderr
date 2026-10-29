@@ -74,6 +74,11 @@ public class BubbleService extends AccessibilityService {
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         dp = getResources().getDisplayMetrics().density;
         addBubble();
+        // The app in front may already be a browser (no "window changed" event will come for it).
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root != null && root.getPackageName() != null) {
+            inJobApp = isJobApp(root.getPackageName().toString().toLowerCase());
+        }
         setState("idle", "");
     }
 

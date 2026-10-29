@@ -159,6 +159,22 @@ adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.googl
 sleep 3
 adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/2-activity.txt"
 grep -q "com.android.chrome" "$OUT/2-activity.txt" || fail "Chrome is not in front before bubble tap"
+# Wait until the bubble's overlay window is really visible (View.VISIBLE = 0x0) before tapping.
+bubble_visible() {
+  adb shell dumpsys window windows > "$OUT/2-windows.txt" 2>/dev/null || true
+  # Only the bubble window's own block: from its "Window #" line to the next one.
+  awk -v id="u0 $PKG}" '/^ *Window #/ { inside = index($0, id) > 0 } inside' "$OUT/2-windows.txt" \
+    | grep -q "mViewVisibility=0x0"
+}
+for attempt in 1 2 3; do
+  for _ in $(seq 1 8); do bubble_visible && break; sleep 1; done
+  bubble_visible && break
+  echo "bubble not visible yet (attempt $attempt): bring Chrome to the front again"
+  adb shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main \
+    -d "http://localhost:8765/job.html" >/dev/null || true
+  sleep 3
+done
+bubble_visible || fail "the B bubble did not show over Chrome"
 shot 2-chrome-with-bubble
 
 # The bubble (56dp) sits on the right edge, its top at half the usable height. Tap its middle;
