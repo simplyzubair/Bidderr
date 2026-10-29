@@ -35,11 +35,22 @@ public static RECT Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return r; }
 public static void MoveTo(int x, int y) { SetCursorPos(x, y); }
 public static void LeftDown() { mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); }
 public static void LeftUp() { mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); }
-public static bool ClickTextArea(IntPtr h) {
+// Clicks inside the window's text, but never on the Bidderr bubble (ax,ay,aw,ah = its rect):
+// a click on an old "Paste" bubble would paste a proposal, like it would for a person.
+public static bool ClickTextArea(IntPtr h, int ax, int ay, int aw, int ah) {
   RECT r;
   if (!GetWindowRect(h, out r)) return false;
-  int x = r.Left + Math.Min(200, Math.Max(40, (r.Right - r.Left) / 3));
-  int y = r.Top + Math.Min(190, Math.Max(100, (r.Bottom - r.Top) / 3));
+  int[][] spots = {
+    new[] { r.Left + Math.Min(200, Math.Max(40, (r.Right - r.Left) / 3)), r.Top + Math.Min(190, Math.Max(100, (r.Bottom - r.Top) / 3)) },
+    new[] { r.Left + 60, r.Top + 130 },
+    new[] { r.Left + 60, r.Top + 260 },
+    new[] { r.Left + 420, r.Top + 260 },
+  };
+  int x = spots[0][0], y = spots[0][1];
+  foreach (var s in spots) {
+    bool onBubble = aw > 0 && s[0] >= ax - 12 && s[0] <= ax + aw + 12 && s[1] >= ay - 12 && s[1] <= ay + ah + 12;
+    if (!onBubble) { x = s[0]; y = s[1]; break; }
+  }
   if (!SetCursorPos(x, y)) return false;
   mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
   mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
@@ -78,6 +89,13 @@ function Assert-Selection([string]$expected) {
   Start-Sleep -Milliseconds 200
 }
 
+# Where the Bidderr bubble is now (newest "[bubble] bounds" log line), or zeros if never shown.
+function Bubble-Rect {
+  $hit = @(Get-Content $appLog -ErrorAction SilentlyContinue | Select-String -Pattern '\[bubble\] bounds ')
+  if ($hit.Count -eq 0) { return @(0, 0, 0, 0) }
+  return @(($hit[-1].Line -split ' ')[-1] -split ',' | ForEach-Object { [int]$_ })
+}
+
 function Focus-Process($proc) {
   if (-not $proc) { throw 'No process was provided to focus' }
   $h = [IntPtr]::Zero
@@ -94,7 +112,8 @@ function Focus-Process($proc) {
     [E2E.Win]::SetForegroundWindow($h) | Out-Null
     Start-Sleep -Milliseconds 300
     if ([E2E.Win]::GetForegroundWindow() -eq $h) {
-      if (-not [E2E.Win]::ClickTextArea($h)) { throw "Could not click inside $($proc.ProcessName)" }
+      $b = Bubble-Rect
+      if (-not [E2E.Win]::ClickTextArea($h, $b[0], $b[1], $b[2], $b[3])) { throw "Could not click inside $($proc.ProcessName)" }
       Start-Sleep -Milliseconds 200
       return
     }
@@ -231,7 +250,8 @@ try {
   if ($sent.Count -lt 1 -or -not ($sent[-1] | ConvertFrom-Json).job.Contains('BUBBLE JOB')) { throw '4 - the API did not get the selected job text' }
   Shot '4b-paste-bubble'
   # Put the cursor at the end of the text (the "proposal box"), then click the Paste bubble.
-  [E2E.Win]::ClickTextArea($np2.MainWindowHandle) | Out-Null
+  $b = Bubble-Rect
+  [E2E.Win]::ClickTextArea($np2.MainWindowHandle, $b[0], $b[1], $b[2], $b[3]) | Out-Null
   Press-Keys @(0x11) 0x23 # Ctrl+End
   $pasteLines = @(Get-Content $appLog).Count
   $c = Bubble-Center 'paste' $logLines
