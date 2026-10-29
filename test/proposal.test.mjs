@@ -1,9 +1,13 @@
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { generateProposal, formatProposal, toUnicodeBold, MODELS, DEFAULT_PROMPT, checkApiKey, maskKey } = require('../shared/proposal.js');
+const {
+  generateProposal, formatProposal, toUnicodeBold, MODELS, DEFAULT_PROMPT, checkApiKey, maskKey, forgetFailedModels,
+} = require('../shared/proposal.js');
+
+beforeEach(() => forgetFailedModels());
 
 const JOB = 'Hi, I am Sarah. I need my blurry logo redrawn as a clean vector file for print. Budget $40.';
 
@@ -74,6 +78,23 @@ test('generateProposal falls back to the next model on quota errors', async () =
   const f = fakeFetch([{ status: 429, body: { error: { message: 'quota' } } }, answer('ok text here')]);
   assert.equal(await generateProposal(JOB, 'KEY', { fetchImpl: f }), 'ok text here');
   assert.match(f.calls[1].url, new RegExp(MODELS[1]));
+});
+
+test('a model that just failed is tried last next time, so it costs no extra wait', async () => {
+  const f = fakeFetch([{ status: 429, body: { error: { message: 'quota' } } }, answer('first'), answer('second')]);
+  await generateProposal(JOB, 'KEY', { fetchImpl: f });
+  await generateProposal(JOB, 'KEY', { fetchImpl: f });
+  assert.equal(f.calls.length, 3);
+  assert.match(f.calls[2].url, new RegExp(MODELS[1]));
+});
+
+test('a model that refused the thinking setting is asked without it next time', async () => {
+  const thinkingErr = { status: 400, body: { error: { message: 'thinking is not supported' } } };
+  const f = fakeFetch([thinkingErr, answer('one'), answer('two')]);
+  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-2.5-flash'] });
+  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-2.5-flash'] });
+  assert.equal(f.calls.length, 3);
+  assert.equal(f.calls[2].body.generationConfig.thinkingConfig, undefined);
 });
 
 test('generateProposal skips thinking parts and tries the next model on an empty answer', async () => {

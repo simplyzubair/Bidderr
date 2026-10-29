@@ -15,8 +15,49 @@
   // 3.8-flash: smarter; we ask it to think at "low" to keep it quick.
   const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
 
+  // A model that just failed is skipped for a while, so it doesn't cost an extra round trip on
+  // every proposal: a missing model (404) for a day, a busy or out-of-quota one for a minute.
+  // Kept for the session, and in the WebView's localStorage on Android (the writer page reloads).
+  const RESTING_KEY = 'bidderr.restingModels';
+  const pageStorage = () => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
+    } catch {
+      return null;
+    }
+  };
+  let resting = {}; // model -> time it may be tried again
+  try {
+    resting = JSON.parse(pageStorage()?.getItem(RESTING_KEY) || '{}') || {};
+  } catch {
+    resting = {};
+  }
+  function restModel(model, status) {
+    if (status) resting[model] = Date.now() + (status === 404 ? 24 * 3600e3 : 60e3);
+    else delete resting[model];
+    try {
+      pageStorage()?.setItem(RESTING_KEY, JSON.stringify(resting));
+    } catch {
+      // storage full or blocked: remembering for this session is enough
+    }
+  }
+  // For tests: forget which models failed.
+  function forgetFailedModels() {
+    resting = {};
+    noThinking.clear();
+  }
+  // Rested models go to the end of the list (still tried if all the others fail).
+  function modelOrder(models) {
+    const ready = (m) => !(resting[m] > Date.now());
+    return [...models.filter(ready), ...models.filter((m) => !ready(m))];
+  }
+
+  // Models that refused our thinking setting; asked without it from then on (saves a retry).
+  const noThinking = new Set();
+
   // How much each model may "think" before writing. Less thinking = faster answer.
   function thinkingConfigFor(model) {
+    if (noThinking.has(model)) return null;
     if (model.startsWith('gemini-2.5') || model === 'gemini-flash-latest') return { thinkingBudget: 0 };
     if (model.includes('3.5-flash-lite')) return { thinkingLevel: 'minimal' };
     if (model.startsWith('gemini-3')) return { thinkingLevel: 'low' };
@@ -74,7 +115,8 @@ OUTPUT RULES:
   }
 
   // The three work profiles the user picks from. Each prompt can be edited in the app; these are the
-  // "Reset" values.
+  // "Reset" values. Never rename an id: both apps save the user's own prompts under it, and every
+  // new version must keep using those (only a profile never saved, or Reset, gets a new default).
   const PROFILES = [
     {
       id: 'vector',
@@ -222,6 +264,7 @@ OUTPUT RULES:
       const data = await res.json().catch(() => ({}));
       // If the model rejected thinkingConfig, retry once without it
       if (res.status === 400 && genConfig.thinkingConfig && /thinking/i.test(data?.error?.message || '')) {
+        noThinking.add(model);
         return callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, onProgress, false);
       }
       await failWith(res, data);
@@ -293,7 +336,7 @@ OUTPUT RULES:
   // onProgress (optional): called with the proposal so far, so the app can show it while it is written.
   async function generateProposal(jobText, apiKey, {
     prompt, fetchImpl = fetch, models = MODELS, apiBase = GOOGLE_API,
-    backupKey = '', backupBase = OPENROUTER_API, onProgress,
+    backupKey = '', backupBase = OPENROUTER_API, onProgress, log = () => {},
   } = {}) {
     const job = String(jobText || '').trim();
     if (!apiKey && !backupKey) throw new Error('No API key yet. Open Settings and paste your free Google key.');
@@ -303,11 +346,17 @@ OUTPUT RULES:
 
     let googleError = null;
     if (apiKey) {
-      for (const model of models) {
+      for (const model of modelOrder(models)) {
+        const started = Date.now();
         try {
           onProgress?.(''); // a new attempt starts from an empty box
-          return formatProposal(await callGemini(model, apiKey, systemPrompt, jobPart, fetchImpl, apiBase, onProgress));
+          const text = await callGemini(model, apiKey, systemPrompt, jobPart, fetchImpl, apiBase, onProgress);
+          log(`[ai] ${model} answered in ${Date.now() - started} ms`);
+          if (resting[model]) restModel(model, 0);
+          return formatProposal(text);
         } catch (e) {
+          log(`[ai] ${model} failed after ${Date.now() - started} ms: ${e.status || ''} ${e.message}`);
+          if (RETRY_NEXT_MODEL.has(e.status)) restModel(model, e.status);
           googleError = e;
           // A bad key fails for every model, so stop. Other errors (model missing, busy, out of
           // free quota, model can't do this request) may work with the next model.
@@ -317,10 +366,14 @@ OUTPUT RULES:
       if (!backupKey) throw friendlyGoogleError(googleError);
     }
 
+    const started = Date.now();
     try {
       onProgress?.('');
-      return formatProposal(await callOpenRouter(backupKey, systemPrompt, jobPart, fetchImpl, backupBase, onProgress));
+      const text = await callOpenRouter(backupKey, systemPrompt, jobPart, fetchImpl, backupBase, onProgress);
+      log(`[ai] OpenRouter answered in ${Date.now() - started} ms`);
+      return formatProposal(text);
     } catch (e) {
+      log(`[ai] OpenRouter failed after ${Date.now() - started} ms: ${e.message}`);
       const backup = friendlyBackupError(e);
       if (!googleError) throw new Error(backup);
       throw new Error(`${friendlyGoogleError(googleError).message} The OpenRouter backup also failed: ${backup}`);
@@ -378,5 +431,6 @@ OUTPUT RULES:
   return {
     MODELS, PROFILES, DEFAULT_PROFILE, DEFAULT_PROMPT, OPENROUTER_MODEL, defaultPromptFor,
     toUnicodeBold, formatProposal, generateProposal, checkApiKey, checkBackupKey, maskKey, addToHistory,
+    forgetFailedModels,
   };
 });

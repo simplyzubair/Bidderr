@@ -151,7 +151,7 @@ $('save-prompt').addEventListener('click', async () => {
 
 $('reset-prompt').addEventListener('click', async () => {
   if (!confirm(`Replace the ${currentProfile().name} prompt with the default one?`)) return;
-  showProfiles(await window.bidderr.savePrompt(profiles.profile, currentProfile().defaultPrompt));
+  showProfiles(await window.bidderr.savePrompt(profiles.profile, ''));
   toast('Default prompt restored');
 });
 

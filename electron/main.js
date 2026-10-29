@@ -259,7 +259,7 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
     // While the window is open, the proposal shows up there as it is written.
     const onProgress = settingsWindow ? (text) => settingsWindow?.webContents.send('progress', text) : undefined;
     lastProposal = await generateProposal(job, getApiKey(), {
-      prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress,
+      prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress, log,
     });
     clipboard.writeText(lastProposal);
     remember(job, lastProposal);
@@ -501,7 +501,9 @@ ipcMain.handle('set-profile', (_e, id) => {
 ipcMain.handle('save-prompt', (_e, id, prompt) => {
   if (!PROFILES.some((p) => p.id === id)) return profilesView();
   const text = String(prompt || '').trim().slice(0, 20000);
-  const prompts = { ...savedPrompts(), [id]: text === defaultPromptFor(id) ? '' : text };
+  // A saved prompt is kept exactly as saved, through every update. Only an empty one (Reset)
+  // follows Bidderr's built-in default.
+  const prompts = { ...savedPrompts(), [id]: text };
   saveSettings({ prompts, prompt: '' });
   return profilesView();
 });

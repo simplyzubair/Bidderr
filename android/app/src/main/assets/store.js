@@ -53,10 +53,10 @@
       if (isProfile(id)) localStorage.setItem('bidderr.profile', id);
     },
     prompt: getPrompt,
-    // Saving the default text (or nothing) means "use the default".
+    // A saved prompt is kept exactly as saved, through every update. Saving nothing (Reset)
+    // means "use Bidderr's built-in default".
     savePrompt(id, text) {
-      const value = String(text || '').trim();
-      localStorage.setItem(`bidderr.prompt.${id}`, value === defaultPromptFor(id) ? '' : value);
+      localStorage.setItem(`bidderr.prompt.${id}`, String(text || '').trim());
       if (id === DEFAULT_PROFILE) localStorage.removeItem('bidderr.prompt');
     },
 

@@ -2,7 +2,7 @@
 // UI helpers (ui.js), window.store the saved settings (store.js), window.Android the bridge
 // from MainActivity.java.
 const $ = (id) => document.getElementById(id);
-const { generateProposal, checkApiKey, checkBackupKey, maskKey, PROFILES, defaultPromptFor } = window.Bidderr;
+const { generateProposal, checkApiKey, checkBackupKey, maskKey, PROFILES } = window.Bidderr;
 const { toast, setNote, busyButton, renderProfiles, renderHistory } = window.ui;
 const { store } = window;
 
@@ -198,7 +198,7 @@ $('save-prompt').addEventListener('click', () => {
 });
 $('reset-prompt').addEventListener('click', () => {
   if (!confirm(`Replace the ${profileName(store.profile)} prompt with the default one?`)) return;
-  store.savePrompt(store.profile, defaultPromptFor(store.profile));
+  store.savePrompt(store.profile, '');
   $('prompt').value = store.prompt(store.profile);
   toast('Default prompt restored');
 });
