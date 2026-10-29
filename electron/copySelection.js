@@ -7,7 +7,8 @@ const koffi = require('koffi');
 const user32 = koffi.load('user32.dll');
 
 // INPUT for a key press, laid out like the 64-bit Windows struct (40 bytes).
-const INPUT = koffi.struct('BIDDERR_KEY_INPUT', {\n  type: 'uint32',
+const INPUT = koffi.struct('BIDDERR_KEY_INPUT', {
+  type: 'uint32',
   pad1: 'uint32',
   wVk: 'uint16',
   wScan: 'uint16',
@@ -69,7 +70,8 @@ async function copySelection() {
   await waitForHotkeyRelease();
   const window = foregroundTitle();
   const before = GetClipboardSequenceNumber();
-  const sent = sendKeys([\n    [VK.CONTROL, false],
+  const sent = sendKeys([
+    [VK.CONTROL, false],
     [VK.C, false],
     [VK.C, true],
     [VK.CONTROL, true],
@@ -91,4 +93,16 @@ async function copySelection() {
   return { text: clipboard.readText(), copied: false, info };
 }
 
-module.exports = { copySelection };
+// Pastes the clipboard into whatever box has the keyboard focus (the "Paste" bubble).
+async function pasteClipboard() {
+  await waitForHotkeyRelease();
+  const sent = sendKeys([
+    [VK.CONTROL, false],
+    [0x56, false], // V
+    [0x56, true],
+    [VK.CONTROL, true],
+  ]);
+  return { sent, window: foregroundTitle() };
+}
+
+module.exports = { copySelection, pasteClipboard };

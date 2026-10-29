@@ -17,16 +17,20 @@ The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and
 
 - Install `Bidderr-Setup.exe`. If Windows warns you, click **More info → Run anyway** (the app is not code-signed).
 - Bidderr lives in the tray, near the clock, and starts with Windows.
-- Use it: select the job post with the mouse (`Ctrl+A` selects the whole page), press **`Ctrl+Shift+1`**,
-  wait for the "Proposal ready" message, then paste (`Ctrl+V`). No `Ctrl+C` needed.
+- Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). A green **Write proposal**
+  bubble pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Sound 1 = writing.
+  Sound 2 = copied, and the bubble turns into **Paste proposal**: click the proposal box, then the bubble.
+  The selection bubble can be turned off in the window or the tray menu.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 
 ## 3. Android
 
 - Install `Bidderr.apk`. Allow "install unknown apps" when Android asks.
-- Turn on the **floating B bubble** (the app shows the steps). Then open a job in Chrome or the Upwork app,
-  tap **B**, and you come back to the job with the proposal copied. Tap the proposal box and paste.
-- Without the bubble: select the job text, tap **Write proposal** in the text menu (or **Share → Bidderr**).
+- Select the job text in Chrome or the Upwork app and tap **✍ Write proposal** in the text menu.
+  Only a small bubble shows at the bottom (the app does not open): sound 1 = writing, sound 2 = copied.
+  Long-press the proposal box and tap Paste.
+- Optional **B bubble** (Accessibility; the app shows the steps): tap B on a job page to write without
+  selecting. When ready it turns into a green **Paste** button that pastes into the box you tapped.
 - When an update is out, the app shows **Update now**.
 
 ## Edit the prompt

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'">
+  <link rel="stylesheet" href="../shared/bubble.css">
+</head>
+<body>
+  <!-- Floating bubble next to the mouse: "Write proposal" -> "Writing..." -> "Paste proposal". -->
+  <div id="bubble" class="bubble offer" role="button" tabindex="-1">
+    <img class="logo" src="../branding/logo.svg" alt="">
+    <div class="text">
+      <div class="label">Write proposal</div>
+      <div class="sub"></div>
+    </div>
+    <div class="state"></div>
+  </div>
+  <script src="../shared/ui.js"></script>
+  <script src="bubble.js"></script>
+</body>
+</html>

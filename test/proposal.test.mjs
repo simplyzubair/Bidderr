@@ -47,6 +47,12 @@ test('generateProposal disables thinking on 2.5 models for immediate generation'
   assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingBudget, 0);
 });
 
+test('generateProposal asks Gemini 3 Flash to think at "low" for speed', async () => {
+  const f = fakeFetch([answer('Hello,\n\nBest,\nKhan')]);
+  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-3.8-flash'] });
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'low');
+});
+
 test('generateProposal retries without thinkingConfig if model rejects thinking', async () => {
   const thinkingErr = { status: 400, body: { error: { message: 'thinkingConfig is only supported for models with thinking' } } };
   const f = fakeFetch([thinkingErr, answer('Hello,\n\nBest,\nKhan')]);

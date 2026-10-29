@@ -114,7 +114,8 @@ $('save-prompt').addEventListener('click', () => {
   toast('Prompt saved. The next proposal uses it.');
 });
 $('reset-prompt').addEventListener('click', () => {
-  if (!confirm('Replace your prompt with the default one?')) return;\n  store.prompt = DEFAULT_PROMPT;
+  if (!confirm('Replace your prompt with the default one?')) return;
+  store.prompt = DEFAULT_PROMPT;
   $('prompt').value = DEFAULT_PROMPT;
   toast('Default prompt restored');
 });
@@ -145,7 +146,8 @@ const RELEASES_API = 'https://api.github.com/repos/simplyzubair/Bidderr/releases
 const installedVersion = window.Android?.version ? window.Android.version() : '';
 let updateUrl = '';
 
-function isNewer(latest, current) {\n  const a = latest.split('.').map(Number);
+function isNewer(latest, current) {
+  const a = latest.split('.').map(Number);
   const b = current.split('.').map(Number);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);

@@ -43,5 +43,28 @@
     };
   }
 
-  window.ui = { toast, setNote, busyButton };
+  // Sounds live next to this script: shared/sounds/<name>.wav.
+  const soundBase = new URL('sounds/', document.currentScript.src).href;
+  const sounds = {};
+
+  // ui.sound('writing') or ui.sound('done'). Never throws; a muted device just stays quiet.
+  function sound(name) {
+    try {
+      sounds[name] = sounds[name] || new Audio(`${soundBase}${name}.wav`);
+      sounds[name].currentTime = 0;
+      sounds[name].play().catch(() => {});
+    } catch {
+      // no audio available
+    }
+  }
+
+  // Updates a bubble (see shared/bubble.css): state is offer | writing | paste | done | error.
+  function setBubble(el, state, label, sub = '') {
+    el.className = `bubble ${state}`;
+    el.querySelector('.label').textContent = label;
+    el.querySelector('.sub').textContent = sub;
+    el.setAttribute('aria-label', sub ? `${label}. ${sub}` : label);
+  }
+
+  window.ui = { toast, setNote, busyButton, sound, setBubble };
 })();

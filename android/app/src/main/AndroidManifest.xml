@@ -22,13 +22,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Select text in any app, then pick "Write proposal" from the text menu. -->
-            <intent-filter android:label="Write proposal">
-                <action android:name="android.intent.action.PROCESS_TEXT" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-
             <!-- Share text to Bidderr. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -37,7 +30,23 @@
             </intent-filter>
         </activity>
 
-        <!-- The floating "B" bubble. It reads the job on screen when tapped. -->
+        <!-- Floating writer: select text in any app, tap "Write proposal" in the text menu.
+             Shows only a small bubble over the page, never the app screen. -->
+        <activity
+            android:name=".WriterActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Bidderr.Floating">
+            <intent-filter android:label="✍ Write proposal">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- The optional floating "B" bubble. It reads the job on screen when tapped, and pastes. -->
         <service
             android:name=".BubbleService"
             android:exported="true"

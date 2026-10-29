@@ -1,12 +1,14 @@
-// Bidderr for Windows: lives in the tray. Select a job post, press Ctrl+Shift+1, and the
-// proposal lands in the clipboard ready to paste. A small status box in the screen corner
-// shows what is happening (it works even when Windows notifications are turned off).
+// Bidderr for Windows: lives in the tray. Select a job post and click the "Write proposal"
+// bubble (or press Ctrl+Shift+1): the proposal lands in the clipboard and the bubble turns
+// into "Paste proposal". A status box in the screen corner shows start-up, update and hotkey
+// messages (it works even when Windows notifications are turned off).
 const { app, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, safeStorage, shell, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 const { generateProposal, checkApiKey, maskKey, DEFAULT_PROMPT } = require('../shared/proposal.js');
-const { copySelection } = require('./copySelection.js');
+const { copySelection, pasteClipboard } = require('./copySelection.js');
+const { startSelectionWatch } = require('./selectionWatch.js');
 
 const HOTKEY = 'CommandOrControl+Shift+1';
 const ICON = path.join(__dirname, '../public/icon.png');
@@ -110,33 +112,130 @@ function showHud(kind, title, detail = '') {
   if (hideAfter) hudTimer = setTimeout(() => hudWindow?.hide(), hideAfter);
 }
 
+// ---------- the floating bubble next to the mouse ----------
+// offer ("Write proposal") -> writing (sound 1) -> paste (sound 2, "Paste proposal") -> done.
+// It never takes the keyboard focus, so the page under it keeps its selection / text box.
+
+let bubbleWindow = null;
+let bubbleState = '';
+let bubbleTimer = null;
+let bubbleHovered = false;
+
+function createBubble() {
+  bubbleWindow = new BrowserWindow({
+    width: 240,
+    height: 70,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  bubbleWindow.setAlwaysOnTop(true, 'screen-saver');
+  bubbleWindow.loadFile(path.join(__dirname, 'bubble.html'));
+}
+
+const BUBBLE_HIDE_AFTER = { offer: 4500, done: 1500, error: 8000, paste: 3 * 60 * 1000 };
+
+function scheduleBubbleHide() {
+  clearTimeout(bubbleTimer);
+  const ms = BUBBLE_HIDE_AFTER[bubbleState];
+  if (ms && !bubbleHovered) bubbleTimer = setTimeout(hideBubble, ms);
+}
+
+function hideBubble() {
+  clearTimeout(bubbleTimer);
+  bubbleState = '';
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
+}
+
+// at: screen point to show the bubble next to; without it the bubble stays where it is.
+function showBubble(state, label, sub = '', { sound = '', at = null } = {}) {
+  log(`[bubble] ${state}: ${label}${sub ? ` - ${sub}` : ''}`);
+  bubbleState = state;
+  tray?.setToolTip(`Bidderr - ${label}`);
+  if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
+  if (at || !bubbleWindow.isVisible()) {
+    const point = at || screen.getCursorScreenPoint();
+    const { workArea } = screen.getDisplayNearestPoint(point);
+    const [w, h] = bubbleWindow.getSize();
+    bubbleWindow.setPosition(
+      Math.round(Math.min(Math.max(point.x + 14, workArea.x), workArea.x + workArea.width - w)),
+      Math.round(Math.min(Math.max(point.y + 14, workArea.y), workArea.y + workArea.height - h)),
+    );
+  }
+  bubbleWindow.webContents.send('bubble', { state, label, sub, sound });
+  bubbleWindow.showInactive(); // never steal focus from the page the user is on
+  scheduleBubbleHide();
+}
+
 // ---------- the main action ----------
 
-// From the hotkey: copy the selected job text first. From the tray or window: use the clipboard.
-async function writeProposal({ fromSelection = false } = {}) {
+// From the hotkey or the bubble: copy the selected job text first. From the tray or the main
+// window: use the text already in the clipboard.
+async function writeProposal({ fromSelection = false, at = null } = {}) {
   if (busy) return;
   busy = true;
   log(`[action] write proposal (fromSelection=${fromSelection})`);
   try {
     if (!getApiKey()) throw new Error('No API key yet. Click here to add your free Google key.');
-    showHud('working', 'Reading the job...');
+    showBubble('writing', 'Writing proposal...', 'Reading the job', { sound: 'writing', at });
     let job = clipboard.readText();
     if (fromSelection) {
       const result = await copySelection();
       job = result.text;
       log(`[copy] selection copied=${result.copied}, ${job.length} chars, ${result.info}`);
     }
-    showHud('working', 'Writing your proposal...');
+    showBubble('writing', 'Writing proposal...', 'A few seconds');
     lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt(), apiBase: API_BASE });
     clipboard.writeText(lastProposal);
-    showHud('ok', 'Proposal copied', 'Click the proposal box and press Ctrl+V');
+    settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Proposal copied', lastProposal });
+    showBubble('paste', 'Paste proposal', 'Click the proposal box, then here', { sound: 'done' });
   } catch (e) {
-    showHud('error', 'Could not write the proposal', e.message);
+    settingsWindow?.webContents.send('status', { kind: 'error', text: e.message, lastProposal });
+    showBubble('error', 'Could not write it', e.message);
     if (/API key/.test(e.message)) openSettings();
   } finally {
     busy = false;
   }
 }
+
+async function pasteProposal() {
+  const { sent, window } = await pasteClipboard();
+  log(`[paste] sent=${sent}/4 window="${window}"`);
+  showBubble('done', 'Pasted', 'Good luck with the job!');
+}
+
+function onBubbleClicked() {
+  if (bubbleState === 'offer') {
+    const [x, y] = bubbleWindow.getPosition();
+    writeProposal({ fromSelection: true, at: { x: x - 14, y: y - 14 } });
+  } else if (bubbleState === 'paste') {
+    pasteProposal();
+  } else if (bubbleState === 'error') {
+    hideBubble();
+    openSettings();
+  }
+}
+
+// The user selected a block of text: offer to write a proposal from it.
+function onTextSelected(at, reason) {
+  if (busy || bubbleState === 'paste' || bubbleState === 'writing') return;
+  log(`[select] ${reason}`);
+  showBubble('offer', 'Write proposal', 'From the selected text', { at });
+}
+
+const selectionBubbleOn = () => loadSettings().selectionBubble !== false;
 
 // ---------- updates (from the newest GitHub release) ----------
 // New versions download in the background. The user installs them with the "Update now"
@@ -226,6 +325,15 @@ function buildTrayMenu() {
       ? { label: `Update now to ${update.version}`, click: installUpdate }
       : { label: 'Check for updates', click: () => checkForUpdates({ manual: true }) },
     {
+      label: 'Show bubble when I select text',
+      type: 'checkbox',
+      checked: selectionBubbleOn(),
+      click: (item) => {
+        saveSettings({ selectionBubble: item.checked });
+        settingsWindow?.webContents.send('selection-bubble', item.checked);
+      },
+    },
+    {
       label: 'Start with Windows',
       type: 'checkbox',
       checked: app.getLoginItemSettings().openAtLogin,
@@ -246,6 +354,7 @@ ipcMain.handle('get-state', () => ({
   lastProposal,
   version: app.getVersion(),
   update,
+  selectionBubble: selectionBubbleOn(),
 }));
 
 // Tests the key with Google first. A key Google rejects is never saved, and an empty box
@@ -279,6 +388,29 @@ ipcMain.on('hud-clicked', () => {
 });
 ipcMain.handle('update-check', () => checkForUpdates({ manual: true }));
 ipcMain.handle('update-install', () => installUpdate());
+ipcMain.on('bubble-clicked', onBubbleClicked);
+ipcMain.on('bubble-hover', (_e, inside) => {
+  bubbleHovered = Boolean(inside);
+  if (bubbleHovered) clearTimeout(bubbleTimer);
+  else scheduleBubbleHide();
+});
+ipcMain.on('bubble-size', (_e, width, height) => {
+  if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
+  const w = Math.min(Math.max(Math.round(width) || 0, 120), 420);
+  const h = Math.min(Math.max(Math.round(height) || 0, 50), 140);
+  const [x, y] = bubbleWindow.getPosition();
+  bubbleWindow.setBounds({ x, y, width: w, height: h });
+  if (DEV) {
+    // Screen pixels of the pill, for the end-to-end test to click on.
+    const r = screen.dipToScreenRect(bubbleWindow, bubbleWindow.getBounds());
+    log(`[bubble] bounds ${bubbleState} ${r.x},${r.y},${r.width},${r.height}`);
+  }
+});
+ipcMain.handle('set-selection-bubble', (_e, on) => {
+  saveSettings({ selectionBubble: Boolean(on) });
+  tray?.setContextMenu(buildTrayMenu());
+  return selectionBubbleOn();
+});
 
 // ---------- start ----------
 
@@ -290,17 +422,21 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     app.setAppUserModelId('com.bidderr.app');
     tray = new Tray(TRAY_ICON);
-    tray.setToolTip('Bidderr - select a job, press Ctrl+Shift+1');
+    tray.setToolTip('Bidderr - select a job, click the bubble or press Ctrl+Shift+1');
     tray.on('click', openSettings);
     createHud();
+    createBubble();
 
-    const hotkeyOk = globalShortcut.register(HOTKEY, () => writeProposal({ fromSelection: true }));
-    log(`[start] version ${app.getVersion()}, hotkey registered=${hotkeyOk}`);
+    const hotkeyOk = globalShortcut.register(HOTKEY, () =>
+      writeProposal({ fromSelection: true, at: screen.getCursorScreenPoint() }));
+    const stopWatch = startSelectionWatch({ onSelection: onTextSelected, isEnabled: selectionBubbleOn, log });
+    app.on('will-quit', stopWatch);
+    log(`[start] version ${app.getVersion()}, hotkey registered=${hotkeyOk}, selection bubble=${selectionBubbleOn()}`);
 
-    // CI check of the packaged app: it started, loaded its Windows helper and got the hotkey.
+    // CI check of the packaged app: it started, loaded its Windows helpers and got the hotkey.
     const smoke = process.argv.find((a) => a.startsWith('--smoke-test='));
     if (smoke) {
-      fs.writeFileSync(smoke.slice('--smoke-test='.length), JSON.stringify({ version: app.getVersion(), hotkeyOk }));
+      fs.writeFileSync(smoke.slice('--smoke-test='.length), JSON.stringify({ version: app.getVersion(), hotkeyOk, bubble: Boolean(bubbleWindow) }));
       app.quit();
       return;
     }
@@ -319,7 +455,7 @@ if (!app.requestSingleInstanceLock()) {
     if (!getApiKey() || !hotkeyOk) openSettings();
     else {
       hudWindow.webContents.once('did-finish-load', () =>
-        showHud('ok', 'Bidderr is running', 'Select a job post and press Ctrl+Shift+1'));
+        showHud('ok', 'Bidderr is running', 'Select a job post, then click the Write bubble'));
     }
     setupAutoUpdates();
   });

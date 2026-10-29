@@ -80,6 +80,19 @@ grep -q "SHARED JOB" "$OUT/1-share.xml" || fail "the shared job text is not show
 shot 1-share
 echo "PASS share"
 
+echo "=== 1b. Text menu 'Write proposal' opens only the floating writer bubble"
+adb shell am force-stop $PKG
+adb shell am start -a android.intent.action.PROCESS_TEXT -t text/plain \
+  --es android.intent.extra.PROCESS_TEXT "'MENU JOB: Hello, I need a flyer for my gym opening next week. Budget 30 dollars.'" \
+  -n $PKG/.WriterActivity || fail "start writer"
+wait_for_text "No API key yet" 1b-writer || fail "the floating writer did not show the no-key message"
+grep -q "MENU JOB" "$OUT/1b-writer.xml" || fail "the floating writer did not show which text it read"
+adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/1b-activity.txt"
+grep -q "WriterActivity" "$OUT/1b-activity.txt" || fail "the text menu opened something else than the floating writer"
+shot 1b-writer
+adb shell am force-stop $PKG
+echo "PASS text menu writer"
+
 echo "=== 2. Bubble over Chrome"
 if ! adb shell pm list packages | grep -q com.android.chrome; then
   echo "Chrome is not on this emulator image; skipping the bubble test"; exit 0

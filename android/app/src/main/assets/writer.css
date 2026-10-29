@@ -1,0 +1,16 @@
+/* Writer page: transparent, the bubble sits at the bottom centre. */
+html, body { height: 100%; }
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.read {
+  max-width: calc(100vw - 48px); padding: 3px 10px; border-radius: 999px;
+  background: rgba(10, 15, 28, 0.82); color: #94a3b8; font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.read:empty { display: none; }
+.bubble { padding: 9px 18px 9px 9px; }
+.bubble .logo { width: 40px; height: 40px; }
+.bubble .label { font-size: 16px; }
+.bubble .sub { font-size: 13px; max-width: calc(100vw - 150px); }

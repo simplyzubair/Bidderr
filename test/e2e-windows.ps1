@@ -31,6 +31,10 @@ public static uint SendKey(byte vk, bool up) {
   if (vk == 0x23) k.dwFlags |= 0x0001u; // End is an extended key
   return SendInput(1, new[] { k }, Marshal.SizeOf(typeof(KEYINPUT)));
 }
+public static RECT Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return r; }
+public static void MoveTo(int x, int y) { SetCursorPos(x, y); }
+public static void LeftDown() { mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); }
+public static void LeftUp() { mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); }
 public static bool ClickTextArea(IntPtr h) {
   RECT r;
   if (!GetWindowRect(h, out r)) return false;
@@ -120,6 +124,33 @@ function Shot([string]$name) {
 
 $BOLD_D = [char]::ConvertFromUtf32(0x1D403)   # the Unicode bold "D" of "Delivery Time"
 
+# Like a person selecting text: press, move in small steps, let go.
+function Drag([int]$x1, [int]$y1, [int]$x2, [int]$y2) {
+  [E2E.Win]::MoveTo($x1, $y1); Start-Sleep -Milliseconds 150
+  [E2E.Win]::LeftDown(); Start-Sleep -Milliseconds 100
+  for ($i = 1; $i -le 12; $i++) {
+    [E2E.Win]::MoveTo([int]($x1 + ($x2 - $x1) * $i / 12), [int]($y1 + ($y2 - $y1) * $i / 12))
+    Start-Sleep -Milliseconds 35
+  }
+  Start-Sleep -Milliseconds 100
+  [E2E.Win]::LeftUp()
+}
+
+function Click-At([int]$x, [int]$y) {
+  [E2E.Win]::MoveTo($x, $y); Start-Sleep -Milliseconds 120
+  [E2E.Win]::LeftDown(); Start-Sleep -Milliseconds 70
+  [E2E.Win]::LeftUp()
+}
+
+# Centre of the bubble in screen pixels, from the newest "[bubble] bounds <state> x,y,w,h" log line.
+function Bubble-Center([string]$state, [int]$after) {
+  Wait-Log "\[bubble\] bounds $state " 10 $after | Out-Null
+  Start-Sleep -Milliseconds 400 # the pill may resize once more
+  $line = @(Get-Content $appLog | Select-Object -Skip $after | Select-String -Pattern "\[bubble\] bounds $state ")[-1].Line
+  $x, $y, $w, $h = ($line -split ' ')[-1] -split ',' | ForEach-Object { [int]$_ }
+  return @([int]($x + $w / 2), [int]($y + $h / 2))
+}
+
 # Runs one case: $prepare sets up the screen, then the real hotkey is pressed.
 function Run-Case([string]$name, [scriptblock]$prepare, [string]$expectJob, [string]$expectCopied) {
   Write-Host "=== $name"
@@ -129,7 +160,7 @@ function Run-Case([string]$name, [scriptblock]$prepare, [string]$expectJob, [str
   $mockLines = @(Get-Content $mockLog).Count
   Press-Hotkey
   Wait-Log "\[copy\] selection copied=$expectCopied" 15 $logLines | Write-Host
-  Wait-Log '\[hud\] ok: Proposal copied' 20 $logLines | Write-Host
+  Wait-Log '\[bubble\] paste: Paste proposal' 20 $logLines | Write-Host
   Start-Sleep -Milliseconds 300
   Shot $name
   $clipboardDeadline = (Get-Date).AddSeconds(3)
@@ -175,6 +206,45 @@ try {
     Start-Sleep -Milliseconds 200
     Set-Clipboard -Value 'COPIED JOB: I need a business card designed in two days, simple and modern, budget 25 dollars.'
   } 'COPIED JOB' 'false'
+
+  # 4. The bubble, like a person: drag over the job text, click "Write proposal", click into
+  #    the text, click "Paste proposal". No keyboard at all.
+  Write-Host '=== 4-bubble-select-write-paste'
+  Set-Clipboard -Value 'OLD CLIPBOARD TEXT'
+  $job2 = Join-Path $work 'job2.txt'
+  Set-Content $job2 (1..14 | ForEach-Object { "BUBBLE JOB line ${_}: Hi, I am Tom. I need a friendly logo for my bakery, for signs and cups." })
+  $np2 = Start-Process notepad.exe $job2 -PassThru
+  $procs += $np2
+  Focus-Process $np2
+  $r = [E2E.Win]::Rect($np2.MainWindowHandle)
+  $logLines = @(Get-Content $appLog).Count
+  $mockLines = @(Get-Content $mockLog).Count
+  # Start a few lines down (inside the text whatever the menu height) and drag over 4 lines.
+  Drag ($r.Left + 30) ($r.Top + 110) ($r.Left + 420) ($r.Top + 175)
+  Wait-Log '\[select\] drag' 5 $logLines | Write-Host
+  $c = Bubble-Center 'offer' $logLines
+  Shot '4a-write-bubble'
+  Click-At $c[0] $c[1]
+  Wait-Log '\[copy\] selection copied=true' 15 $logLines | Write-Host
+  Wait-Log '\[bubble\] paste: Paste proposal' 20 $logLines | Write-Host
+  $sent = @(Get-Content $mockLog | Select-Object -Skip $mockLines)
+  if ($sent.Count -lt 1 -or -not ($sent[-1] | ConvertFrom-Json).job.Contains('BUBBLE JOB')) { throw '4 - the API did not get the selected job text' }
+  Shot '4b-paste-bubble'
+  # Put the cursor at the end of the text (the "proposal box"), then click the Paste bubble.
+  [E2E.Win]::ClickTextArea($np2.MainWindowHandle) | Out-Null
+  Press-Keys @(0x11) 0x23 # Ctrl+End
+  $pasteLines = @(Get-Content $appLog).Count
+  $c = Bubble-Center 'paste' $logLines
+  Click-At $c[0] $c[1]
+  Wait-Log '\[paste\] sent=4/4' 10 $pasteLines | Write-Host
+  Start-Sleep -Milliseconds 600
+  Shot '4c-pasted'
+  Press-Keys @(0x11) 0x41 # Ctrl+A
+  Press-Keys @(0x11) 0x43 # Ctrl+C
+  Start-Sleep -Milliseconds 300
+  $all = Get-Clipboard -Raw
+  if (-not ($all.Contains('BUBBLE JOB') -and $all.Contains('Best,') -and $all.Contains($BOLD_D))) { throw "4 - the proposal was not pasted into Notepad: $all" }
+  Write-Host 'PASS 4-bubble-select-write-paste'
 
   # 3. A job page in Chrome: select all, press the hotkey.
   $page = Join-Path $work 'job.html'

@@ -115,8 +115,19 @@ $('update-btn').addEventListener('click', () => {
 });
 window.bidderr.onUpdate(showUpdate);
 
+// ---------- selection bubble on/off ----------
+
+$('selection-bubble').addEventListener('change', async () => {
+  const on = await window.bidderr.setSelectionBubble($('selection-bubble').checked);
+  toast(on ? 'The bubble will show when you select text' : 'Bubble off. Use Ctrl+Shift+1 instead.');
+});
+window.bidderr.onSelectionBubble((on) => {
+  $('selection-bubble').checked = on;
+});
+
 window.bidderr.getState().then((state) => {
   currentVersion = state.version;
+  $('selection-bubble').checked = state.selectionBubble;
   showUpdate(state.update);
   showKey(state);
   $('hotkey-warning').classList.toggle('hidden', state.hotkeyOk);
