@@ -22,7 +22,7 @@
     </svg>
     <div>
       <h1>Bidderr</h1>
-      <p>Winning proposals in one tap</p>
+      <p>Instant proposals in one tap</p>
     </div>
     <span id="ready-pill" class="pill">Loading</span>
   </header>
@@ -33,19 +33,12 @@
     <p id="update-note" class="note"></p>
   </section>
 
-  <section id="bubble-card" class="card highlight hidden">
-    <div class="card-head"><h2>Turn on the B bubble</h2><span class="pill warn">Off</span></div>
-    <p class="muted">A green <strong>B</strong> floats over job pages. Tap it and Bidderr reads the job by itself. No selecting, no copying.</p>
-    <ol class="steps">
-      <li><span class="num">1</span><b>Tap Open settings</b><small>Below this list</small></li>
-      <li><span class="num">2</span><b>Turn on "Bidderr bubble"</b><small>Maybe under "Installed apps"</small></li>
-      <li><span class="num">3</span><b>Greyed out?</b><small>Settings › Apps › Bidderr › ⋮ › Allow restricted settings, then step 2</small></li>
-    </ol>
-    <div class="row"><button id="bubble-settings" class="btn primary">Open settings</button></div>
-  </section>
-
   <button id="paste-write" class="btn primary big">Paste job &amp; write proposal</button>
   <p id="status" class="note"></p>
+
+  <p class="muted" style="text-align: center; margin: 8px 0 16px; font-size: 13px;">
+    ⚡ <b>Fast tip:</b> Select text on any job page and tap <b>Write proposal</b> in the popup menu (or Share → Bidderr). No extra permissions needed!
+  </p>
 
   <section class="card mt">
     <div class="card-head">
@@ -55,6 +48,17 @@
     <textarea id="result" placeholder="Your proposal shows here. It is copied for you automatically."></textarea>
     <div class="row"><button id="again" class="btn">Write a new version</button></div>
   </section>
+
+  <details id="bubble-card" class="card">
+    <summary>Floating B bubble (optional) <span id="bubble-pill" class="pill">Off</span></summary>
+    <p class="muted">Optional shortcut: A green <strong>B</strong> floats over job pages so you can tap it to read the job automatically without selecting text.</p>
+    <ol class="steps">
+      <li><span class="num">1</span><b>Tap Open settings</b><small>Below this list</small></li>
+      <li><span class="num">2</span><b>Turn on "Bidderr bubble"</b><small>Under "Installed apps"</small></li>
+      <li><span class="num">3</span><b>If greyed out on Android 13+:</b><small>Settings › Apps › Bidderr › ⋮ › Allow restricted settings, then turn it on</small></li>
+    </ol>
+    <div class="row"><button id="bubble-settings" class="btn">Open settings</button></div>
+  </details>
 
   <details id="key-card" class="card">
     <summary>Google API key <span id="key-pill" class="pill">No key</span></summary>
@@ -86,9 +90,9 @@
   <details class="card">
     <summary>Help</summary>
     <ol class="plain">
-      <li>Open a job post and tap the green <strong>B</strong>. You come back to the job with the proposal copied. Tap the proposal box and paste.</li>
-      <li>Drag the <strong>B</strong> to move it out of the way.</li>
-      <li>No bubble? Select the job text, then tap <strong>Write proposal</strong> in the menu (or <strong>Share › Bidderr</strong>).</li>
+      <li><b>Super fast:</b> Select job text in Chrome or any app, tap <b>Write proposal</b> in the popup menu. Bidderr generates your proposal immediately and copies it ready to paste!</li>
+      <li><b>Or copy &amp; paste:</b> Copy the job text and tap <b>Paste job &amp; write proposal</b> above.</li>
+      <li><b>Optional bubble:</b> Turn on the B bubble above if you prefer a floating on-screen button.</li>
     </ol>
   </details>
 

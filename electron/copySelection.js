@@ -7,8 +7,7 @@ const koffi = require('koffi');
 const user32 = koffi.load('user32.dll');
 
 // INPUT for a key press, laid out like the 64-bit Windows struct (40 bytes).
-const INPUT = koffi.struct('BIDDERR_KEY_INPUT', {
-  type: 'uint32',
+const INPUT = koffi.struct('BIDDERR_KEY_INPUT', {\n  type: 'uint32',
   pad1: 'uint32',
   wVk: 'uint16',
   wScan: 'uint16',
@@ -61,7 +60,7 @@ async function waitForHotkeyRelease() {
   for (let i = 0; i < 70 && keys.some(isDown); i++) await sleep(15);
   const stuck = keys.filter(isDown);
   if (stuck.length) sendKeys(stuck.map((vk) => [vk, true]));
-  await sleep(30);
+  await sleep(20);
 }
 
 // Returns { text, copied, info }. copied=false means nothing was selected, so the text is
@@ -70,8 +69,7 @@ async function copySelection() {
   await waitForHotkeyRelease();
   const window = foregroundTitle();
   const before = GetClipboardSequenceNumber();
-  const sent = sendKeys([
-    [VK.CONTROL, false],
+  const sent = sendKeys([\n    [VK.CONTROL, false],
     [VK.C, false],
     [VK.C, true],
     [VK.CONTROL, true],
@@ -79,16 +77,16 @@ async function copySelection() {
   const info = `window="${window}" sent=${sent}/4`;
 
   for (let i = 0; i < 60; i++) {
-    await sleep(25);
     if (GetClipboardSequenceNumber() !== before) {
       // Some apps write the clipboard in several steps; give them a moment to finish.
       for (let j = 0; j < 10; j++) {
-        await sleep(30);
         const text = clipboard.readText();
         if (text.trim()) return { text, copied: true, info };
+        await sleep(15);
       }
       break;
     }
+    await sleep(15);
   }
   return { text: clipboard.readText(), copied: false, info };
 }

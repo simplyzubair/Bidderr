@@ -126,7 +126,7 @@ async function writeProposal({ fromSelection = false } = {}) {
       job = result.text;
       log(`[copy] selection copied=${result.copied}, ${job.length} chars, ${result.info}`);
     }
-    showHud('working', 'Writing your proposal...', 'This takes a few seconds');
+    showHud('working', 'Writing your proposal...');
     lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt(), apiBase: API_BASE });
     clipboard.writeText(lastProposal);
     showHud('ok', 'Proposal copied', 'Click the proposal box and press Ctrl+V');

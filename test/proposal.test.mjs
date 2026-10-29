@@ -38,6 +38,22 @@ test('generateProposal sends the prompt and job to Gemini', async () => {
   assert.equal(f.calls[0].key, 'KEY');
   assert.match(f.calls[0].body.systemInstruction.parts[0].text, /Offer Summary/);
   assert.match(f.calls[0].body.contents[0].parts[0].text, /blurry logo/);
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig, undefined);
+});
+
+test('generateProposal disables thinking on 2.5 models for immediate generation', async () => {
+  const f = fakeFetch([answer('Hello,\n\nBest,\nKhan')]);
+  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-2.5-flash'] });
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingBudget, 0);
+});
+
+test('generateProposal retries without thinkingConfig if model rejects thinking', async () => {
+  const thinkingErr = { status: 400, body: { error: { message: 'thinkingConfig is only supported for models with thinking' } } };
+  const f = fakeFetch([thinkingErr, answer('Hello,\n\nBest,\nKhan')]);
+  const out = await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-2.5-flash'] });
+  assert.equal(out, 'Hello,\n\nBest,\nKhan');
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[1].body.generationConfig.thinkingConfig, undefined);
 });
 
 test('generateProposal uses the edited prompt, and the default when it is blank', async () => {

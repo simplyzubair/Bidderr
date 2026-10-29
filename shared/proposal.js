@@ -9,7 +9,10 @@
   else root.Bidderr = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   // Tried in order. If one is missing or out of free quota, the next one is used.
-  const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'];
+  // gemini-2.0-flash is ultra-fast with immediate generation and no reasoning delay.
+  // gemini-2.5-flash is paired with thinkingBudget=0 so it generates immediately without thinking delay.
+  // gemini-1.5-flash and gemini-2.0-flash-lite serve as reliable fast fallbacks.
+  const MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
 
   // The default prompt. The user can replace it in the app (Edit prompt); this is the "Reset" value.
   const DEFAULT_PROMPT = `You write Upwork / PeoplePerHour proposals for a freelancer named Khan.
@@ -83,20 +86,29 @@ OUTPUT RULES:
 
   const GOOGLE_API = 'https://generativelanguage.googleapis.com';
 
-  async function callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase) {
+  async function callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, allowThinking = true) {
     const url = `${apiBase}/v1beta/models/${model}:generateContent`;
+    const genConfig = { temperature: 0.7, maxOutputTokens: 2048 };
+    // On models that have reasoning/thinking enabled by default (like 2.5), set thinkingBudget to 0
+    // so generation is immediate and does not waste 10-20 seconds generating invisible thought tokens.
+    if (allowThinking && (model.includes('2.5') || model.includes('thinking'))) {
+      genConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: prompt }] },
         contents: [{ role: 'user', parts: [{ text: `JOB POSTING:\n\n${jobText}` }] }],
-        // Newer models "think" first and that counts against this limit, so keep it roomy.
-        generationConfig: { temperature: 0.8, maxOutputTokens: 8192 },
+        generationConfig: genConfig,
       }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // If the model rejected thinkingConfig, retry once without it
+      if (res.status === 400 && genConfig.thinkingConfig && /thinking/i.test(data?.error?.message || '')) {
+        return callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, false);
+      }
       const err = new Error(data?.error?.message || `Google returned error ${res.status}`);
       err.status = res.status;
       throw err;

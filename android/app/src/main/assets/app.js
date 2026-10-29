@@ -75,7 +75,7 @@ async function write(jobText) {
     const proposal = await generateProposal(jobText, store.key, { prompt: store.prompt });
     $('result').value = proposal;
     copyText(proposal);
-    setNote($('status'), 'Done! The proposal is copied. Go back and paste it.', 'ok');
+    setNote($('status'), 'Done! Proposal copied. Go back and paste it.', 'ok');
     toast('Proposal copied');
     return true;
   } catch (e) {
@@ -114,8 +114,7 @@ $('save-prompt').addEventListener('click', () => {
   toast('Prompt saved. The next proposal uses it.');
 });
 $('reset-prompt').addEventListener('click', () => {
-  if (!confirm('Replace your prompt with the default one?')) return;
-  store.prompt = DEFAULT_PROMPT;
+  if (!confirm('Replace your prompt with the default one?')) return;\n  store.prompt = DEFAULT_PROMPT;
   $('prompt').value = DEFAULT_PROMPT;
   toast('Default prompt restored');
 });
@@ -124,7 +123,14 @@ $('reset-prompt').addEventListener('click', () => {
 
 function refreshBubbleCard() {
   const supported = Boolean(window.Android?.isBubbleOn);
-  $('bubble-card').classList.toggle('hidden', !supported || window.Android.isBubbleOn());
+  if (!supported) {
+    $('bubble-card')?.classList.add('hidden');
+    return;
+  }
+  const on = window.Android.isBubbleOn();
+  if ($('bubble-pill')) {
+    setNote($('bubble-pill'), on ? 'Active' : 'Off', on ? 'ok' : '');
+  }
 }
 $('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
 // Coming back to the app: refresh the bubble card and look for a new version.
@@ -139,8 +145,7 @@ const RELEASES_API = 'https://api.github.com/repos/simplyzubair/Bidderr/releases
 const installedVersion = window.Android?.version ? window.Android.version() : '';
 let updateUrl = '';
 
-function isNewer(latest, current) {
-  const a = latest.split('.').map(Number);
+function isNewer(latest, current) {\n  const a = latest.split('.').map(Number);
   const b = current.split('.').map(Number);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
@@ -169,7 +174,7 @@ async function checkForUpdate() {
     if (!isNewer(latest, installedVersion)) {
       updateUrl = '';
       $('update-card').classList.remove('highlight');
-      title.textContent = 'You’re up to date';
+      title.textContent = 'You\u2019re up to date';
       setNote(note, `Installed version ${installedVersion}. Latest version ${latest}.`, 'ok');
       button.textContent = 'Check again';
       return;
