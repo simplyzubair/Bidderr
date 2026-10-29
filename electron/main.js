@@ -211,6 +211,8 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
 }
 
 async function pasteProposal() {
+  // Always paste the proposal itself, even if something else was copied meanwhile.
+  if (lastProposal) clipboard.writeText(lastProposal);
   const { sent, window } = await pasteClipboard();
   log(`[paste] sent=${sent}/4 window="${window}"`);
   showBubble('done', 'Pasted', 'Good luck with the job!');
@@ -229,8 +231,9 @@ function onBubbleClicked() {
 }
 
 // The user selected a block of text: offer to write a proposal from it.
+// A new selection replaces an old "Paste" bubble; only a proposal being written blocks it.
 function onTextSelected(at, reason) {
-  if (busy || bubbleState === 'paste' || bubbleState === 'writing') return;
+  if (busy || bubbleState === 'writing') return;
   log(`[select] ${reason}`);
   showBubble('offer', 'Write proposal', 'From the selected text', { at });
 }

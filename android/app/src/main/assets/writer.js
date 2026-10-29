@@ -20,13 +20,17 @@ function closeIn(ms) {
 function show(newState, label, sub) {
   state = newState;
   setBubble(bubble, newState, label, sub);
+  // Goes to Android's log (tag "chromium"); the emulator test checks these steps.
+  console.info(`[bidderr-writer] ${newState}: ${label} | ${sub}`);
 }
 
 // Called by WriterActivity with the selected (or screen) text.
 window.startWriting = async (text) => {
   clearTimeout(closeTimer);
   const job = String(text || '').trim();
-  document.getElementById('read').textContent = job ? `Read: ${job.replace(/\s+/g, ' ').slice(0, 70)}` : '';
+  const preview = job.replace(/\s+/g, ' ').slice(0, 70);
+  document.getElementById('read').textContent = job ? `Read: ${preview}` : '';
+  console.info(`[bidderr-writer] read ${job.length} chars: ${job.replace(/\s+/g, ' ').slice(0, 120)}`);
   show('writing', 'Writing proposal...', 'A few seconds');
   sound('writing');
   android?.bubble('writing', '');

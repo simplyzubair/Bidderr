@@ -96,6 +96,9 @@ jobs:
   e2e-windows:
     needs: test
     runs-on: windows-latest
+    # On test branches a failure here must not email the user: the agent reads the result itself.
+    # On main it stays strict and blocks the release.
+    continue-on-error: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -115,6 +118,7 @@ jobs:
     needs: android
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

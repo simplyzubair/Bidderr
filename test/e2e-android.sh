@@ -65,6 +65,16 @@ wait_for_text() {
   done
   return 1
 }
+# The floating writer is a small see-through window that UI dumps don't always include, so it
+# reports each step to Android's log (WebView console, tag "chromium"). Wait for a line there.
+wait_for_log() {
+  for _ in $(seq 1 30); do
+    adb logcat -d -s chromium:I > "$OUT/$2.log" 2>/dev/null || true
+    if grep -q "$1" "$OUT/$2.log"; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
 
 adb install -r "$APK" || fail "install"
 adb shell settings put global window_animation_scale 0
@@ -82,14 +92,16 @@ echo "PASS share"
 
 echo "=== 1b. Text menu 'Write proposal' opens only the floating writer bubble"
 adb shell am force-stop $PKG
+adb logcat -c
 adb shell am start -a android.intent.action.PROCESS_TEXT -t text/plain \
   --es android.intent.extra.PROCESS_TEXT "'MENU JOB: Hello, I need a flyer for my gym opening next week. Budget 30 dollars.'" \
   -n $PKG/.WriterActivity || fail "start writer"
-wait_for_text "No API key yet" 1b-writer || fail "the floating writer did not show the no-key message"
-grep -q "MENU JOB" "$OUT/1b-writer.xml" || fail "the floating writer did not show which text it read"
+wait_for_log "bidderr-writer\] read .*MENU JOB" 1b-writer || fail "the floating writer did not get the selected text"
+wait_for_log "bidderr-writer\] error: .*No API key yet" 1b-writer || fail "the floating writer did not show the no-key message"
+shot 1b-writer
 adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/1b-activity.txt"
 grep -q "WriterActivity" "$OUT/1b-activity.txt" || fail "the text menu opened something else than the floating writer"
-shot 1b-writer
+grep -q "MainActivity" "$OUT/1b-activity.txt" && fail "the text menu opened the full app instead of the bubble"
 adb shell am force-stop $PKG
 echo "PASS text menu writer"
 
@@ -157,12 +169,14 @@ DP=$(( DENSITY ))
 X=$(( W - (36 * DP / 160) ))
 Y=$(( H / 2 + (16 * DP / 160) ))
 echo "screen ${W}x${H} density $DENSITY, tapping bubble at $X,$Y"
+adb logcat -c
 adb shell input tap "$X" "$Y"
-wait_for_text "No API key yet" 3-after-bubble || fail "tapping the bubble did not open Bidderr"
-adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/3-activity.txt"
-grep -q "$PKG" "$OUT/3-activity.txt" || fail "Bidderr is not in front after the bubble tap"
-grep -q "BUBBLE JOB" "$OUT/3-after-bubble.xml" || fail "the bubble did not read the job text from Chrome"
+wait_for_log "bidderr-writer\] read" 3-after-bubble || fail "tapping the bubble did not start the floating writer"
+grep -q "bidderr-writer\] read .*BUBBLE JOB" "$OUT/3-after-bubble.log" || fail "the bubble did not read the job text from Chrome"
+wait_for_log "bidderr-writer\] error: .*No API key yet" 3-after-bubble || fail "the writer did not show the no-key message after the bubble tap"
 shot 3-after-bubble
+adb shell dumpsys activity activities | grep -m1 -E "mResumedActivity|topResumedActivity" | tee "$OUT/3-activity.txt"
+grep -q "WriterActivity" "$OUT/3-activity.txt" || fail "the bubble tap did not open the floating writer"
 echo "PASS bubble"
 echo "ALL ANDROID END-TO-END TESTS PASSED"
 touch "$OUT/PASS"
