@@ -214,6 +214,24 @@ public class MainActivity extends Activity {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         }
 
+        // Android 13+: "Allow restricted settings" is in the ⋮ menu of this screen.
+        @JavascriptInterface
+        public void openAppInfo() {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName())));
+        }
+
+        // The API keys, encrypted by the Android Keystore (see SecretStore).
+        @JavascriptInterface
+        public String getSecret(String name) {
+            return SecretStore.get(MainActivity.this, name);
+        }
+
+        @JavascriptInterface
+        public boolean setSecret(String name, String value) {
+            return SecretStore.set(MainActivity.this, name, value);
+        }
+
         @JavascriptInterface
         public void installUpdate(String url) {
             if (url == null || !url.startsWith(UPDATE_PREFIX) || !url.endsWith(".apk")) {

@@ -6,11 +6,13 @@ const { app, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, safe
 const fs = require('fs');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
-const { generateProposal, checkApiKey, maskKey, DEFAULT_PROMPT } = require('../shared/proposal.js');
+const {
+  generateProposal, checkApiKey, checkBackupKey, maskKey, addToHistory, PROFILES, DEFAULT_PROFILE, defaultPromptFor,
+} = require('../shared/proposal.js');
 const { copySelection, pasteClipboard } = require('./copySelection.js');
 const { startSelectionWatch } = require('./selectionWatch.js');
 
-const HOTKEY = 'CommandOrControl+Shift+1';
+const DEFAULT_HOTKEY = 'Ctrl+Shift+1';
 const ICON = path.join(__dirname, '../public/icon.png');
 const TRAY_ICON = path.join(__dirname, '../public/tray.png');
 
@@ -50,22 +52,74 @@ function saveSettings(changes) {
   fs.writeFileSync(settingsFile(), JSON.stringify({ ...loadSettings(), ...changes }));
 }
 
-function getApiKey() {
-  const { apiKey } = loadSettings();
-  if (!apiKey) return DEV ? process.env.BIDDERR_API_KEY || '' : '';
+function decrypt(saved) {
+  if (!saved) return '';
   try {
-    return safeStorage.decryptString(Buffer.from(apiKey, 'base64'));
+    return safeStorage.decryptString(Buffer.from(saved, 'base64'));
   } catch {
     return '';
   }
 }
 
-function saveApiKey(key) {
-  saveSettings({ apiKey: safeStorage.encryptString(key).toString('base64') });
+const encrypt = (key) => safeStorage.encryptString(key).toString('base64');
+
+function getApiKey() {
+  const { apiKey } = loadSettings();
+  if (!apiKey) return DEV ? process.env.BIDDERR_API_KEY || '' : '';
+  return decrypt(apiKey);
 }
 
-// An empty saved prompt means "use the default prompt".
-const getPrompt = () => loadSettings().prompt || DEFAULT_PROMPT;
+function saveApiKey(key) {
+  saveSettings({ apiKey: encrypt(key) });
+}
+
+// Optional OpenRouter key, used when Google fails. Encrypted the same way.
+const getBackupKey = () => decrypt(loadSettings().backupKey);
+
+// ---------- work profiles (Vector Tracing, Embroidery Digitizing, General Design) ----------
+// Each profile has its own prompt. An empty saved prompt means "use that profile's default".
+
+function getProfile() {
+  const { profile } = loadSettings();
+  return PROFILES.some((p) => p.id === profile) ? profile : DEFAULT_PROFILE;
+}
+
+function savedPrompts() {
+  const { prompts, prompt } = loadSettings();
+  // Older versions had one prompt; it belongs to the first profile (Vector Tracing).
+  return { [DEFAULT_PROFILE]: prompt || '', ...(prompts || {}) };
+}
+
+const getPrompt = (id = getProfile()) => savedPrompts()[id] || defaultPromptFor(id);
+
+function profilesView() {
+  return {
+    profile: getProfile(),
+    list: PROFILES.map(({ id, name }) => ({ id, name, prompt: getPrompt(id), defaultPrompt: defaultPromptFor(id) })),
+  };
+}
+
+// ---------- history of recent proposals (on this PC only) ----------
+
+const historyFile = () => path.join(app.getPath('userData'), 'history.json');
+
+function loadHistory() {
+  try {
+    const list = JSON.parse(fs.readFileSync(historyFile(), 'utf8'));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(job, proposal) {
+  try {
+    fs.writeFileSync(historyFile(), JSON.stringify(addToHistory(loadHistory(), job, proposal, getProfile())));
+    settingsWindow?.webContents.send('history', loadHistory());
+  } catch (e) {
+    log(`[history] could not save: ${e.message}`);
+  }
+}
 
 // ---------- status box (HUD) in the corner of the screen ----------
 
@@ -193,7 +247,7 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
     lastProposal,
   });
   try {
-    if (!getApiKey()) throw new Error('No API key yet. Click here to add your free Google key.');
+    if (!getApiKey() && !getBackupKey()) throw new Error('No API key yet. Click here to add your free Google key.');
     showBubble('writing', 'Writing proposal...', 'Reading the job', { sound: 'writing', at });
     let job = clipboard.readText();
     if (fromSelection) {
@@ -202,8 +256,13 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
       log(`[copy] selection copied=${result.copied}, ${job.length} chars, ${result.info}`);
     }
     showBubble('writing', 'Writing proposal...', 'A few seconds');
-    lastProposal = await generateProposal(job, getApiKey(), { prompt: getPrompt(), apiBase: API_BASE });
+    // While the window is open, the proposal shows up there as it is written.
+    const onProgress = settingsWindow ? (text) => settingsWindow?.webContents.send('progress', text) : undefined;
+    lastProposal = await generateProposal(job, getApiKey(), {
+      prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress,
+    });
     clipboard.writeText(lastProposal);
+    remember(job, lastProposal);
     settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Proposal ready. It is copied—paste it into the job form.', lastProposal });
     showBubble('paste', 'Paste proposal', 'Click the proposal box, then here', { sound: 'done' });
     showHud('ok', 'Proposal ready to paste', 'Your proposal is copied. Paste it into the job form.');
@@ -248,6 +307,47 @@ function onTextSelected(at, reason) {
 }
 
 const selectionBubbleOn = () => loadSettings().selectionBubble !== false;
+// Optional: only offer the bubble in web browsers (fewer pop-ups in other apps).
+const browsersOnlyOn = () => loadSettings().browsersOnly === true;
+
+// ---------- the keyboard shortcut (Ctrl+Shift+1 unless the user picked another one) ----------
+
+let hotkey = '';
+let hotkeyOk = false;
+
+const onHotkey = () => writeProposal({ fromSelection: true, at: screen.getCursorScreenPoint() });
+
+function tryRegister(accelerator) {
+  try {
+    return globalShortcut.register(accelerator, onHotkey);
+  } catch {
+    return false; // not a shortcut Electron understands
+  }
+}
+
+// Switches to a new shortcut. If it is taken, the old one stays. Returns true when it worked.
+function setHotkey(accelerator) {
+  const old = hotkey;
+  if (old) globalShortcut.unregister(old);
+  if (tryRegister(accelerator)) {
+    hotkey = accelerator;
+    hotkeyOk = true;
+    return true;
+  }
+  hotkeyOk = old ? tryRegister(old) : false;
+  return false;
+}
+
+// "Ctrl+Alt+B": one or more of Ctrl/Alt/Shift (Ctrl or Alt required), then one key.
+function isValidHotkey(text) {
+  const parts = String(text || '').split('+');
+  const key = parts.pop();
+  const mods = new Set(parts);
+  return parts.length >= 1 && mods.size === parts.length
+    && parts.every((m) => ['Ctrl', 'Alt', 'Shift'].includes(m))
+    && (mods.has('Ctrl') || mods.has('Alt'))
+    && /^([A-Z0-9]|F([1-9]|1[0-9]|2[0-4]))$/.test(key);
+}
 
 // ---------- updates (from the newest GitHub release) ----------
 // New versions download in the background. The user installs them with the "Update now"
@@ -318,9 +418,9 @@ function openSettings() {
     },
   });
   settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
-  // Links open in the normal browser, and only the Google key page is allowed.
+  // Links open in the normal browser, and only the Google and OpenRouter key pages are allowed.
   settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://aistudio.google.com/')) shell.openExternal(url);
+    if (url.startsWith('https://aistudio.google.com/') || url.startsWith('https://openrouter.ai/')) shell.openExternal(url);
     return { action: 'deny' };
   });
   settingsWindow.on('closed', () => {
@@ -359,10 +459,16 @@ function buildTrayMenu() {
 // ---------- messages from the windows ----------
 
 const keyState = () => ({ hasKey: Boolean(getApiKey()), maskedKey: maskKey(getApiKey()) });
+const backupState = () => ({ hasBackupKey: Boolean(getBackupKey()), maskedBackupKey: maskKey(getBackupKey()) });
 
 ipcMain.handle('get-state', () => ({
   ...keyState(),
-  hotkeyOk: globalShortcut.isRegistered(HOTKEY),
+  hotkeyOk,
+  hotkey,
+  defaultHotkey: DEFAULT_HOTKEY,
+  browsersOnly: browsersOnlyOn(),
+  history: loadHistory(),
+  ...backupState(),
   lastProposal,
   version: app.getVersion(),
   update,
@@ -387,11 +493,60 @@ ipcMain.handle('save-key', async (_e, key) => {
 });
 ipcMain.handle('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
 ipcMain.handle('write-now', () => writeProposal());
-ipcMain.handle('get-prompt', () => ({ prompt: getPrompt(), defaultPrompt: DEFAULT_PROMPT }));
-ipcMain.handle('save-prompt', (_e, prompt) => {
+ipcMain.handle('get-profiles', () => profilesView());
+ipcMain.handle('set-profile', (_e, id) => {
+  if (PROFILES.some((p) => p.id === id)) saveSettings({ profile: id });
+  return profilesView();
+});
+ipcMain.handle('save-prompt', (_e, id, prompt) => {
+  if (!PROFILES.some((p) => p.id === id)) return profilesView();
   const text = String(prompt || '').trim().slice(0, 20000);
-  saveSettings({ prompt: text === DEFAULT_PROMPT ? '' : text });
-  return getPrompt();
+  const prompts = { ...savedPrompts(), [id]: text === defaultPromptFor(id) ? '' : text };
+  saveSettings({ prompts, prompt: '' });
+  return profilesView();
+});
+
+// Same rules as the Google key: tested first, never saved if OpenRouter rejects it.
+ipcMain.handle('save-backup-key', async (_e, key) => {
+  const newKey = String(key || '').trim().slice(0, 200);
+  if (!newKey) return { state: 'invalid', ...backupState() };
+  const check = await checkBackupKey(newKey);
+  log(`[backup-key] check=${check}`);
+  if (check === 'invalid') return { state: 'invalid', ...backupState() };
+  try {
+    saveSettings({ backupKey: encrypt(newKey) });
+  } catch (e) {
+    return { state: 'error', message: `Could not save the key: ${e.message}`, ...backupState() };
+  }
+  return { state: check, ...backupState() };
+});
+ipcMain.handle('remove-backup-key', () => {
+  saveSettings({ backupKey: '' });
+  return backupState();
+});
+
+ipcMain.handle('set-hotkey', (_e, text) => {
+  const wanted = String(text || '');
+  if (!isValidHotkey(wanted)) return { ok: false, hotkey, message: 'Use Ctrl or Alt, plus a letter, number or F-key.' };
+  if (wanted === hotkey) return { ok: true, hotkey };
+  if (!setHotkey(wanted)) return { ok: false, hotkey, message: `${wanted} is taken by another app. Try another one.` };
+  saveSettings({ hotkey: wanted });
+  tray?.setToolTip(`Bidderr - select a job, click the bubble or press ${hotkey}`);
+  log(`[hotkey] now ${hotkey}`);
+  return { ok: true, hotkey };
+});
+
+ipcMain.handle('clear-history', () => {
+  try {
+    fs.rmSync(historyFile(), { force: true });
+  } catch {
+    // nothing to clear
+  }
+  return [];
+});
+ipcMain.handle('set-browsers-only', (_e, on) => {
+  saveSettings({ browsersOnly: Boolean(on) });
+  return browsersOnlyOn();
 });
 ipcMain.on('hud-clicked', () => {
   hudWindow?.hide();
@@ -434,14 +589,17 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     app.setAppUserModelId('com.bidderr.app');
     tray = new Tray(TRAY_ICON);
-    tray.setToolTip('Bidderr - select a job, click the bubble or press Ctrl+Shift+1');
+    // The saved shortcut, or Ctrl+Shift+1. A saved one that no longer works falls back to the default.
+    const saved = loadSettings().hotkey;
+    if (!(isValidHotkey(saved) && setHotkey(saved))) setHotkey(DEFAULT_HOTKEY);
+    tray.setToolTip(`Bidderr - select a job, click the bubble or press ${hotkey || DEFAULT_HOTKEY}`);
     tray.on('click', openSettings);
     createHud();
     createBubble();
 
-    const hotkeyOk = globalShortcut.register(HOTKEY, () =>
-      writeProposal({ fromSelection: true, at: screen.getCursorScreenPoint() }));
-    const stopWatch = startSelectionWatch({ onSelection: onTextSelected, isEnabled: selectionBubbleOn, log });
+    const stopWatch = startSelectionWatch({
+      onSelection: onTextSelected, isEnabled: selectionBubbleOn, browsersOnly: browsersOnlyOn, log,
+    });
     app.on('will-quit', stopWatch);
     log(`[start] version ${app.getVersion()}, hotkey registered=${hotkeyOk}, selection bubble=${selectionBubbleOn()}`);
 
@@ -462,9 +620,9 @@ if (!app.requestSingleInstanceLock()) {
 
     if (!hotkeyOk) {
       hudWindow.webContents.once('did-finish-load', () =>
-        showHud('error', 'Ctrl+Shift+1 is taken by another app', 'Close that app, then restart Bidderr'));
+        showHud('error', `${hotkey || DEFAULT_HOTKEY} is taken by another app`, 'Pick another shortcut in Bidderr, or use the bubble'));
     }
-    if (!getApiKey() || !hotkeyOk) openSettings();
+    if ((!getApiKey() && !getBackupKey()) || !hotkeyOk) openSettings();
     else {
       hudWindow.webContents.once('did-finish-load', () =>
         showHud('ok', 'Bidderr is running', 'Select a job post, then click the Write bubble'));

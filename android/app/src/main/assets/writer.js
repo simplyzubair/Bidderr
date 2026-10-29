@@ -1,13 +1,9 @@
-// Floating writer (WriterActivity). Same engine, key and prompt as the main app page.
-const { generateProposal, DEFAULT_PROMPT } = window.Bidderr;
+// Floating writer (WriterActivity). Same engine, keys, profile and prompts as the main app page.
+const { generateProposal } = window.Bidderr;
 const { setBubble, sound } = window.ui;
+const { store } = window;
 const bubble = document.getElementById('bubble');
 const android = window.Android;
-
-const store = {
-  key: () => localStorage.getItem('bidderr.key') || '',
-  prompt: () => localStorage.getItem('bidderr.prompt') || DEFAULT_PROMPT,
-};
 
 let state = 'writing';
 let closeTimer = null;
@@ -35,8 +31,10 @@ window.startWriting = async (text) => {
   sound('writing');
   android?.bubble('writing', '');
   try {
-    const proposal = await generateProposal(job, store.key(), { prompt: store.prompt() });
+    const profile = store.profile;
+    const proposal = await generateProposal(job, store.key, { prompt: store.prompt(profile), backupKey: store.backupKey });
     android?.copy(proposal);
+    store.remember(job, proposal, profile);
     sound('done');
     android?.bubble('ready', proposal);
     const hint = android?.isBubbleOn() ? 'Tap the proposal box, then the Paste bubble' : 'Long-press the proposal box, then Paste';

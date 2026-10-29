@@ -1,15 +1,10 @@
 // Bidderr Android page. window.Bidderr is the shared engine (proposal.js), window.ui the shared
-// UI helpers (ui.js), window.Android the bridge from MainActivity.java.
+// UI helpers (ui.js), window.store the saved settings (store.js), window.Android the bridge
+// from MainActivity.java.
 const $ = (id) => document.getElementById(id);
-const { generateProposal, checkApiKey, maskKey, DEFAULT_PROMPT } = window.Bidderr;
-const { toast, setNote, busyButton } = window.ui;
-
-const store = {
-  get key() { return localStorage.getItem('bidderr.key') || ''; },
-  set key(v) { localStorage.setItem('bidderr.key', v); },
-  get prompt() { return localStorage.getItem('bidderr.prompt') || DEFAULT_PROMPT; },
-  set prompt(v) { localStorage.setItem('bidderr.prompt', v === DEFAULT_PROMPT ? '' : v); },
-};
+const { generateProposal, checkApiKey, checkBackupKey, maskKey, PROFILES, defaultPromptFor } = window.Bidderr;
+const { toast, setNote, busyButton, renderProfiles, renderHistory } = window.ui;
+const { store } = window;
 
 function copyText(text) {
   if (window.Android) window.Android.copy(text);
@@ -26,7 +21,8 @@ async function readClipboard() {
 function showKey() {
   const has = Boolean(store.key);
   setNote($('key-pill'), has ? maskKey(store.key) : 'No key', has ? 'ok' : 'error');
-  setNote($('ready-pill'), has ? 'Ready' : 'Setup needed', has ? 'ok' : 'warn');
+  const ready = has || Boolean(store.backupKey);
+  setNote($('ready-pill'), ready ? 'Ready' : 'Setup needed', ready ? 'ok' : 'warn');
   if (!has) $('key-card').open = true;
   $('key-card').classList.toggle('highlight', !has);
 }
@@ -64,6 +60,82 @@ $('save-key').addEventListener('click', async () => {
   }
 });
 
+// ---------- backup key (OpenRouter) ----------
+
+function showBackup() {
+  const key = store.backupKey;
+  setNote($('backup-pill'), key ? maskKey(key) : 'Off', key ? 'ok' : '');
+  $('remove-backup').disabled = !key;
+}
+
+$('toggle-backup').addEventListener('click', () => {
+  const show = $('backup-key').type === 'password';
+  $('backup-key').type = show ? 'text' : 'password';
+  $('toggle-backup').textContent = show ? 'Hide' : 'Show';
+});
+
+$('save-backup').addEventListener('click', async () => {
+  const key = $('backup-key').value.trim();
+  if (!key) {
+    setNote($('backup-note'), 'Paste your OpenRouter key in the box first.', 'error');
+    return;
+  }
+  const done = busyButton($('save-backup'), 'Checking with OpenRouter...');
+  const check = await checkBackupKey(key);
+  done();
+  if (check === 'invalid') {
+    setNote($('backup-note'), 'OpenRouter says this key does not work. It was NOT saved.', 'error');
+    return;
+  }
+  store.backupKey = key;
+  $('backup-key').value = '';
+  showBackup();
+  showKey();
+  setNote($('backup-note'), check === 'offline'
+    ? 'Saved, but OpenRouter could not be reached to test it.'
+    : 'Backup key saved and working. It is used only when Google fails.', check === 'offline' ? 'warn' : 'ok');
+  toast('Backup key saved');
+});
+
+$('remove-backup').addEventListener('click', () => {
+  if (!confirm('Remove the OpenRouter backup key?')) return;
+  store.backupKey = '';
+  showBackup();
+  showKey();
+  setNote($('backup-note'), 'Backup key removed.', '');
+});
+
+// ---------- work profiles and their prompts ----------
+
+const profileName = (id) => PROFILES.find((p) => p.id === id).name;
+
+function showProfiles() {
+  renderProfiles($('profiles'), PROFILES, store.profile, (id) => {
+    store.profile = id;
+    showProfiles();
+    toast(`Writing as: ${profileName(id)}`);
+  });
+  $('prompt').value = store.prompt(store.profile);
+  $('prompt-profile').textContent = profileName(store.profile);
+}
+
+// ---------- recent proposals ----------
+
+function showHistory() {
+  const list = store.history;
+  renderHistory($('history'), list, PROFILES, (text) => {
+    copyText(text);
+    toast('Proposal copied');
+  });
+  $('history-pill').textContent = String(list.length);
+}
+
+$('clear-history').addEventListener('click', () => {
+  if (!confirm('Delete the list of recent proposals?')) return;
+  store.clearHistory();
+  showHistory();
+});
+
 // ---------- writing proposals ----------
 
 let busy = false;
@@ -74,11 +146,17 @@ async function write(jobText) {
   setNote($('status'), 'Writing… wait for “Proposal ready” before pasting.', 'working');
   try {
     const job = String(jobText || '').trim();
-    if (!job && store.key) throw new Error('No job post found in the clipboard. Copy the job post first, then try again.');
+    if (!job && (store.key || store.backupKey)) throw new Error('No job post found in the clipboard. Copy the job post first, then try again.');
     $('job').value = job;
-    const proposal = await generateProposal(job, store.key, { prompt: store.prompt });
+    const proposal = await generateProposal(job, store.key, {
+      prompt: store.prompt(store.profile),
+      backupKey: store.backupKey,
+      onProgress: (text) => { $('result').value = text; }, // shows the proposal while it is written
+    });
     $('result').value = proposal;
     copyText(proposal);
+    store.remember(job, proposal, store.profile);
+    showHistory();
     setNote($('status'), 'Proposal ready. It is copied—return to the job and paste it.', 'ok');
     toast('Proposal copied');
     return true;
@@ -114,14 +192,14 @@ $('copy').addEventListener('click', () => {
 // ---------- prompt ----------
 
 $('save-prompt').addEventListener('click', () => {
-  store.prompt = $('prompt').value.trim();
-  $('prompt').value = store.prompt;
-  toast('Prompt saved. The next proposal uses it.');
+  store.savePrompt(store.profile, $('prompt').value);
+  $('prompt').value = store.prompt(store.profile);
+  toast(`Prompt saved for ${profileName(store.profile)}.`);
 });
 $('reset-prompt').addEventListener('click', () => {
-  if (!confirm('Replace your prompt with the default one?')) return;
-  store.prompt = DEFAULT_PROMPT;
-  $('prompt').value = DEFAULT_PROMPT;
+  if (!confirm(`Replace the ${profileName(store.profile)} prompt with the default one?`)) return;
+  store.savePrompt(store.profile, defaultPromptFor(store.profile));
+  $('prompt').value = store.prompt(store.profile);
   toast('Default prompt restored');
 });
 
@@ -139,6 +217,8 @@ function refreshBubbleCard() {
   }
 }
 $('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
+// Android 13+ blocks the bubble for apps not from the Play Store until this is allowed.
+$('app-info').addEventListener('click', () => window.Android?.openAppInfo());
 // Coming back to the app: refresh the bubble card and look for a new version.
 window.onAppResumed = () => {
   refreshBubbleCard();
@@ -218,7 +298,9 @@ $('update').addEventListener('click', () => {
 
 // ---------- start ----------
 
-$('prompt').value = store.prompt;
+showProfiles();
+showHistory();
+showBackup();
 $('version').textContent = installedVersion ? `Bidderr ${installedVersion} · updates from bidderr.skillsgeek.com` : 'Bidderr';
 showKey();
 refreshBubbleCard();

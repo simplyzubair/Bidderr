@@ -1,9 +1,12 @@
 const $ = (id) => document.getElementById(id);
-const { toast, setNote, busyButton } = window.ui;
+const { toast, setNote, busyButton, renderProfiles, renderHistory, shortcutFromKey } = window.ui;
+
+let hasBackupKey = false;
 
 function showKey({ hasKey, maskedKey }) {
   setNote($('key-pill'), hasKey ? `Saved: ${maskedKey}` : 'No key', hasKey ? 'ok' : 'error');
-  setNote($('ready-pill'), hasKey ? 'Ready' : 'Setup needed', hasKey ? 'ok' : 'warn');
+  const ready = hasKey || hasBackupKey;
+  setNote($('ready-pill'), ready ? 'Ready' : 'Setup needed', ready ? 'ok' : 'warn');
   $('key-card').open = !hasKey;
   $('key-card').classList.toggle('highlight', !hasKey);
 }
@@ -51,6 +54,52 @@ $('key').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') saveKey();
 });
 
+// ---------- backup key (OpenRouter) ----------
+
+function showBackup({ hasBackupKey: has, maskedBackupKey }) {
+  hasBackupKey = has;
+  setNote($('backup-pill'), has ? `Saved: ${maskedBackupKey}` : 'Off', has ? 'ok' : '');
+  $('remove-backup').disabled = !has;
+}
+
+$('toggle-backup').addEventListener('click', () => {
+  const show = $('backup-key').type === 'password';
+  $('backup-key').type = show ? 'text' : 'password';
+  $('toggle-backup').textContent = show ? 'Hide' : 'Show';
+});
+
+$('save-backup').addEventListener('click', async () => {
+  const key = $('backup-key').value.trim();
+  if (!key) {
+    setNote($('backup-note'), 'Paste your OpenRouter key in the box first.', 'error');
+    return;
+  }
+  const done = busyButton($('save-backup'), 'Checking with OpenRouter...');
+  const result = await window.bidderr.saveBackupKey(key);
+  done();
+  if (result.state === 'invalid') {
+    setNote($('backup-note'), 'OpenRouter says this key does not work. It was NOT saved.', 'error');
+    return;
+  }
+  if (result.state === 'error') {
+    setNote($('backup-note'), result.message, 'error');
+    return;
+  }
+  $('backup-key').value = '';
+  showBackup(result);
+  const offline = result.state === 'offline';
+  setNote($('backup-note'), offline
+    ? 'Saved, but OpenRouter could not be reached to test it.'
+    : 'Backup key saved and working. It is used only when Google fails.', offline ? 'warn' : 'ok');
+  toast('Backup key saved');
+});
+
+$('remove-backup').addEventListener('click', async () => {
+  if (!confirm('Remove the OpenRouter backup key?')) return;
+  showBackup(await window.bidderr.removeBackupKey());
+  setNote($('backup-note'), 'Backup key removed.', '');
+});
+
 // ---------- proposals ----------
 
 function showStatus({ kind, text, lastProposal }) {
@@ -68,6 +117,10 @@ function showStatus({ kind, text, lastProposal }) {
   if (lastProposal) $('last').value = lastProposal;
 }
 window.bidderr.onStatus(showStatus);
+// The proposal shows up bit by bit while it is written.
+window.bidderr.onProgress((text) => {
+  $('last').value = text;
+});
 
 $('write').addEventListener('click', () => window.bidderr.writeNow());
 $('copy-last').addEventListener('click', async () => {
@@ -76,25 +129,80 @@ $('copy-last').addEventListener('click', async () => {
   toast('Proposal copied');
 });
 
-// ---------- prompt ----------
+// ---------- work profiles and their prompts ----------
 
-let defaultPrompt = '';
+let profiles = { profile: '', list: [] };
+const currentProfile = () => profiles.list.find((p) => p.id === profiles.profile) || profiles.list[0];
+
+function showProfiles(view) {
+  profiles = view;
+  renderProfiles($('profiles'), view.list, view.profile, async (id) => {
+    showProfiles(await window.bidderr.setProfile(id));
+    toast(`Writing as: ${currentProfile().name}`);
+  });
+  $('prompt').value = currentProfile().prompt;
+  $('prompt-profile').textContent = currentProfile().name;
+}
 
 $('save-prompt').addEventListener('click', async () => {
-  $('prompt').value = await window.bidderr.savePrompt($('prompt').value);
-  toast('Prompt saved. The next proposal uses it.');
+  showProfiles(await window.bidderr.savePrompt(profiles.profile, $('prompt').value));
+  toast(`Prompt saved for ${currentProfile().name}.`);
 });
 
 $('reset-prompt').addEventListener('click', async () => {
-  if (!confirm('Replace your prompt with the default one?')) return;
-  $('prompt').value = await window.bidderr.savePrompt(defaultPrompt);
+  if (!confirm(`Replace the ${currentProfile().name} prompt with the default one?`)) return;
+  showProfiles(await window.bidderr.savePrompt(profiles.profile, currentProfile().defaultPrompt));
   toast('Default prompt restored');
 });
 
-window.bidderr.getPrompt().then(({ prompt, defaultPrompt: d }) => {
-  defaultPrompt = d;
-  $('prompt').value = prompt;
+// ---------- recent proposals ----------
+
+function showHistory(list) {
+  renderHistory($('history'), list, profiles.list, async (text) => {
+    await window.bidderr.copyText(text);
+    toast('Proposal copied');
+  });
+  $('history-pill').textContent = String(list.length);
+}
+window.bidderr.onHistory(showHistory);
+
+$('clear-history').addEventListener('click', async () => {
+  if (!confirm('Delete the list of recent proposals?')) return;
+  showHistory(await window.bidderr.clearHistory());
 });
+
+// ---------- keyboard shortcut ----------
+
+function showHotkey(hotkey) {
+  $('hotkey').value = hotkey;
+  const keys = (hotkey || 'Ctrl+Shift+1').split('+').map((k) => {
+    const kbd = document.createElement('kbd');
+    kbd.textContent = k;
+    return kbd;
+  });
+  $('hotkey-keys').replaceChildren(...keys);
+}
+
+$('hotkey').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') return;
+  e.preventDefault();
+  const shortcut = shortcutFromKey(e);
+  if (shortcut) $('hotkey').value = shortcut;
+});
+
+async function saveHotkey(text) {
+  const result = await window.bidderr.setHotkey(text);
+  showHotkey(result.hotkey);
+  if (result.ok) {
+    setNote($('hotkey-note'), `Shortcut is now ${result.hotkey}.`, 'ok');
+    $('hotkey-warning').classList.add('hidden');
+    toast(`Shortcut: ${result.hotkey}`);
+  } else {
+    setNote($('hotkey-note'), result.message, 'error');
+  }
+}
+$('save-hotkey').addEventListener('click', () => saveHotkey($('hotkey').value));
+$('reset-hotkey').addEventListener('click', () => saveHotkey('Ctrl+Shift+1'));
 
 // ---------- updates ----------
 
@@ -129,17 +237,27 @@ window.bidderr.onUpdate(showUpdate);
 
 $('selection-bubble').addEventListener('change', async () => {
   const on = await window.bidderr.setSelectionBubble($('selection-bubble').checked);
-  toast(on ? 'The bubble will show when you select text' : 'Bubble off. Use Ctrl+Shift+1 instead.');
+  toast(on ? 'The bubble will show when you select text' : `Bubble off. Use ${$('hotkey').value || 'the shortcut'} instead.`);
+});
+$('browsers-only').addEventListener('change', async () => {
+  const on = await window.bidderr.setBrowsersOnly($('browsers-only').checked);
+  toast(on ? 'The bubble shows only in web browsers' : 'The bubble shows in all apps');
 });
 window.bidderr.onSelectionBubble((on) => {
   $('selection-bubble').checked = on;
 });
 
-window.bidderr.getState().then((state) => {
+// Profiles first, so the history list can show profile names.
+Promise.all([window.bidderr.getProfiles(), window.bidderr.getState()]).then(([view, state]) => {
+  showProfiles(view);
   currentVersion = state.version;
   $('selection-bubble').checked = state.selectionBubble;
+  $('browsers-only').checked = state.browsersOnly;
   showUpdate(state.update);
+  showBackup(state);
   showKey(state);
+  showHotkey(state.hotkey);
+  showHistory(state.history);
   $('hotkey-warning').classList.toggle('hidden', state.hotkeyOk);
   $('last').value = state.lastProposal;
   $('footer').textContent = `Bidderr ${state.version} · one-click updates`;

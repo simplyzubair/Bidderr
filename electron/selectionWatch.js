@@ -4,7 +4,9 @@
 //   - a triple-click (selects a paragraph)
 //   - Ctrl+A (selects everything)
 // Window moves/resizes, the desktop, File Explorer and Bidderr's own windows are ignored.
+// With "browsers only" on, it only reacts in web browsers (Chrome, Edge, Firefox...).
 const { screen } = require('electron');
+const path = require('path');
 const koffi = require('koffi');
 
 const user32 = koffi.load('user32.dll');
@@ -15,12 +17,43 @@ const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hWnd, _Out
 const GetClassNameW = user32.func('int __stdcall GetClassNameW(void *hWnd, _Out_ uint16_t *name, int max)');
 const GetWindowThreadProcessId = user32.func('uint32 __stdcall GetWindowThreadProcessId(void *hWnd, _Out_ uint32_t *pid)');
 
+const kernel32 = koffi.load('kernel32.dll');
+const OpenProcess = kernel32.func('void * __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)');
+const QueryFullProcessImageNameW = kernel32.func(
+  'bool __stdcall QueryFullProcessImageNameW(void *process, uint32 flags, _Out_ uint16_t *name, _Inout_ uint32_t *size)');
+const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void *handle)');
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
 const VK_LBUTTON = 0x01;
 const VK_CONTROL = 0x11;
 const VK_A = 0x41;
 const IGNORED_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'CabinetWClass', 'Shell_SecondaryTrayWnd']);
 
+const BROWSERS = new Set([
+  'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe',
+  'chromium.exe', 'librewolf.exe', 'waterfox.exe', 'zen.exe', 'browser.exe', 'whale.exe',
+]);
+
 const isDown = (vk) => (GetAsyncKeyState(vk) & 0x8000) !== 0;
+
+// "chrome.exe" for a process id ('' if Windows won't tell us). Remembered, since it is asked often.
+const exeNames = new Map();
+function exeName(pid) {
+  if (exeNames.has(pid)) return exeNames.get(pid);
+  let name = '';
+  const handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+  if (handle) {
+    const buf = new Uint16Array(1024);
+    const size = [buf.length];
+    if (QueryFullProcessImageNameW(handle, 0, buf, size)) {
+      name = path.win32.basename(String.fromCharCode(...buf.slice(0, size[0]))).toLowerCase();
+    }
+    CloseHandle(handle);
+  }
+  if (exeNames.size > 300) exeNames.clear();
+  exeNames.set(pid, name);
+  return name;
+}
 
 function windowInfo(hwnd = GetForegroundWindow()) {
   if (!hwnd) return null;
@@ -39,13 +72,14 @@ function windowInfo(hwnd = GetForegroundWindow()) {
 }
 
 // Returns a stop() function. onSelection(point, reason) is called with the mouse position.
-function startSelectionWatch({ onSelection, isEnabled, log = () => {} }) {
+function startSelectionWatch({ onSelection, isEnabled, browsersOnly = () => false, log = () => {} }) {
   let down = null; // { at, time, win } while the left button is held
   let clicks = []; // recent short clicks, for triple-click
   let ctrlA = false;
   let failed = false;
 
-  const allowed = (win) => win && win.pid !== process.pid && !IGNORED_CLASSES.has(win.className);
+  const allowed = (win) => win && win.pid !== process.pid && !IGNORED_CLASSES.has(win.className)
+    && (!browsersOnly() || BROWSERS.has(exeName(win.pid)));
 
   const tick = () => {
     if (!isEnabled()) {
@@ -97,4 +131,4 @@ function startSelectionWatch({ onSelection, isEnabled, log = () => {} }) {
   return () => clearInterval(timer);
 }
 
-module.exports = { startSelectionWatch, windowInfo };
+module.exports = { startSelectionWatch, windowInfo, exeName };

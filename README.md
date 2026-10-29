@@ -11,7 +11,9 @@ Download: **https://bidderr.skillsgeek.com**
 2. Click **Create API key**, then copy it.
 3. Paste it into Bidderr (Windows: Settings window, Android: the key box) and press **Save**.
 
-The key is saved on this device only, so set it up separately on each computer or phone. The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and try again.
+The key is saved on this device only (encrypted), so set it up separately on each computer or phone. The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and try again.
+
+**Optional backup:** add a free OpenRouter key (https://openrouter.ai/keys) under **Backup AI**. When Google is busy or out of free quota, Bidderr uses one of OpenRouter's free models instead.
 
 ## 2. Windows
 
@@ -20,7 +22,9 @@ The key is saved on this device only, so set it up separately on each computer o
 - Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). The round **Bidderr bubble**
   pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Wait for the green paste badge,
   then click the proposal box and the bubble. Bidderr copies the ready proposal again just before pasting.
-  The selection bubble can be turned off in the window or the tray menu.
+  The selection bubble can be turned off in the window or the tray menu, or set to show only in web browsers.
+- The shortcut can be changed under **Shortcut** in the window.
+- **Recent proposals** keeps your last 30 proposals on the PC, each with a Copy button.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 
 ## 3. Android
@@ -31,12 +35,18 @@ The key is saved on this device only, so set it up separately on each computer o
   Wait for the ready message, return to the job, then paste.
 - Optional **B bubble** (Accessibility; the app shows the steps): tap B on a job page to write without
   selecting. When ready it turns into a green **Paste** button that pastes into the box you tapped.
+- Quick on/off for the B bubble: add the **Bidderr bubble** tile to Quick Settings.
+- **Recent proposals** keeps your last 30 proposals on the phone.
 - When an update is out, the app shows **Update now**.
 
-## Edit the prompt
+## Profiles and prompts
 
-Both apps have an **Advanced: writing instructions** section. Change the text, press **Save prompt**.
-**Reset to default** brings back the built-in prompt (in `shared/proposal.js`).
+Pick your work under **Your work**: **Vector Tracing**, **Embroidery Digitizing** or **General Design**.
+Each profile has its own prompt (offer list, file formats, delivery time). If the job post asks
+screening questions, the proposal ends with short answers ("(fill in)" where only you know).
+
+To change a profile's prompt: pick it, open **Advanced: writing instructions**, edit, press **Save prompt**.
+**Reset to default** brings back that profile's built-in prompt (in `shared/proposal.js`).
 
 ## For developers
 

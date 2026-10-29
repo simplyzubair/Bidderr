@@ -112,3 +112,100 @@ test('generateProposal gives friendly errors', async () => {
   const bad = fakeFetch([{ status: 400, body: { error: { message: 'API key not valid' } } }]);
   await assert.rejects(generateProposal(JOB, 'KEY', { fetchImpl: bad }), /did not accept the API key/);
 });
+
+const { PROFILES, defaultPromptFor, checkBackupKey, addToHistory } = require('../shared/proposal.js');
+
+// A fake streamed (server-sent events) answer made of the given JSON messages.
+function sseBody(messages) {
+  const text = messages.map((m) => `data: ${JSON.stringify(m)}\n\n`).join('') + 'data: [DONE]\n\n';
+  const bytes = new TextEncoder().encode(text);
+  let sent = false;
+  return {
+    getReader: () => ({
+      read: async () => {
+        if (sent) return { done: true };
+        sent = true;
+        return { done: false, value: bytes };
+      },
+    }),
+  };
+}
+
+test('there are three profiles, each with its own Offer Summary', () => {
+  assert.deepEqual(PROFILES.map((p) => p.name), ['Vector Tracing', 'Embroidery Digitizing', 'General Design']);
+  assert.equal(defaultPromptFor('vector'), DEFAULT_PROMPT);
+  assert.match(defaultPromptFor('embroidery'), /DST PES/);
+  assert.match(defaultPromptFor('design'), /PSD/);
+  assert.equal(defaultPromptFor('nope'), DEFAULT_PROMPT);
+  for (const p of PROFILES) {
+    assert.match(p.prompt, /\*\*Price: \$\*\*/);
+    assert.match(p.prompt, /Answers:/); // screening questions
+  }
+});
+
+test('with onProgress the proposal streams in, piece by piece', async () => {
+  const seen = [];
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      body: sseBody([
+        { candidates: [{ content: { parts: [{ text: 'Hello Sarah,\n\n' }] } }] },
+        { candidates: [{ content: { parts: [{ text: '**Price: $40**' }] } }] },
+      ]),
+    };
+  };
+  const out = await generateProposal(JOB, 'KEY', { fetchImpl, onProgress: (t) => seen.push(t) });
+  assert.match(calls[0], /:streamGenerateContent\?alt=sse$/);
+  assert.equal(out, 'Hello Sarah,\n\n𝐏𝐫𝐢𝐜𝐞: $𝟒𝟎');
+  assert.equal(seen.at(-1), out);
+  assert.ok(seen.includes('Hello Sarah,'));
+});
+
+test('when Google fails, the OpenRouter backup key writes the proposal', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, auth: init.headers.Authorization, body: JSON.parse(init.body) });
+    if (url.includes('googleapis')) return { ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Hello from backup,\n\nBest,\nKhan' } }] }) };
+  };
+  const out = await generateProposal(JOB, 'KEY', { fetchImpl, models: ['gemini-x'], backupKey: 'sk-or-1' });
+  assert.equal(out, 'Hello from backup,\n\nBest,\nKhan');
+  const backup = calls.at(-1);
+  assert.match(backup.url, /openrouter\.ai\/api\/v1\/chat\/completions$/);
+  assert.equal(backup.auth, 'Bearer sk-or-1');
+  assert.equal(backup.body.model, 'openrouter/free');
+  assert.match(backup.body.messages[0].content, /Offer Summary/);
+});
+
+test('only a backup key is enough; both failing gives one clear message', async () => {
+  const ok = async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Backup only works' } }] }) });
+  assert.equal(await generateProposal(JOB, '', { fetchImpl: ok, backupKey: 'sk-or-1' }), 'Backup only works');
+  const fail = async (url) => ({
+    ok: false,
+    status: url.includes('openrouter') ? 401 : 429,
+    json: async () => ({ error: { message: 'no' } }),
+  });
+  await assert.rejects(
+    generateProposal(JOB, 'KEY', { fetchImpl: fail, models: ['gemini-x'], backupKey: 'bad' }),
+    /Free limit reached.*OpenRouter backup also failed: OpenRouter did not accept the backup key/,
+  );
+});
+
+test('checkBackupKey reports ok and invalid', async () => {
+  assert.equal(await checkBackupKey('sk', { fetchImpl: async () => ({ ok: true, status: 200 }) }), 'ok');
+  assert.equal(await checkBackupKey('sk', { fetchImpl: async () => ({ ok: false, status: 401 }) }), 'invalid');
+  assert.equal(await checkBackupKey(''), 'invalid');
+});
+
+test('addToHistory keeps the newest 30, newest first', () => {
+  let h = [];
+  for (let i = 0; i < 35; i++) h = addToHistory(h, `job   ${i}`, `proposal ${i}`, 'embroidery');
+  assert.equal(h.length, 30);
+  assert.equal(h[0].proposal, 'proposal 34');
+  assert.equal(h[0].job, 'job 34');
+  assert.equal(h[0].profile, 'embroidery');
+  assert.deepEqual(addToHistory('broken', 'j', 'p').length, 1);
+});

@@ -35,10 +35,14 @@ http
       if (req.method === 'GET' && req.url.startsWith('/v1beta/models')) {
         return res.end(JSON.stringify({ models: [{ name: 'models/test' }] }));
       }
-      if (req.method === 'POST' && req.url.includes(':generateContent')) {
+      if (req.method === 'POST' && /:(stream)?generateContent/i.test(req.url)) {
         const job = JSON.parse(body).contents[0].parts[0].text;
         fs.appendFileSync(LOG, `${JSON.stringify({ url: req.url, job })}\n`);
-        return res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: PROPOSAL }] } }] }));
+        const answer = { candidates: [{ content: { parts: [{ text: PROPOSAL }] } }] };
+        if (!req.url.includes(':streamGenerateContent')) return res.end(JSON.stringify(answer));
+        // Streamed answer, like Google's ?alt=sse.
+        res.setHeader('Content-Type', 'text/event-stream');
+        return res.end(`data: ${JSON.stringify(answer)}\n\n`);
       }
       res.statusCode = 404;
       res.end('{}');

@@ -33,6 +33,7 @@ import java.util.ArrayDeque;
  *   idle    - green B over browsers and job apps. Tap: read the job on screen and write.
  *   writing - the B pulses while the proposal is written.
  *   ready   - turns into a green "Paste" pill. Tap the proposal box, then the pill: pasted.
+ * The Quick Settings tile (BubbleTileService) can pause it: hidden everywhere until turned back on.
  */
 public class BubbleService extends AccessibilityService {
     private static final int MAX_NODES = 4000;
@@ -58,6 +59,17 @@ public class BubbleService extends AccessibilityService {
 
     static boolean isRunning() {
         return instance != null;
+    }
+
+    static boolean isPaused(Context context) {
+        return context.getSharedPreferences("bubble", MODE_PRIVATE).getBoolean("paused", false);
+    }
+
+    static void setPaused(Context context, boolean paused) {
+        context.getSharedPreferences("bubble", MODE_PRIVATE).edit().putBoolean("paused", paused).apply();
+        MAIN.post(() -> {
+            if (instance != null) instance.updateVisibility();
+        });
     }
 
     static void signal(String newState, String text) {
@@ -187,8 +199,10 @@ public class BubbleService extends AccessibilityService {
     }
 
     // The B only shows in job apps; while writing or ready to paste it shows everywhere.
+    // Paused (from the Quick Settings tile): never shows.
     private void updateVisibility() {
-        boolean show = !"idle".equals(state) || inJobApp;
+        if (bubble == null) return;
+        boolean show = !isPaused(this) && (!"idle".equals(state) || inJobApp);
         bubble.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 

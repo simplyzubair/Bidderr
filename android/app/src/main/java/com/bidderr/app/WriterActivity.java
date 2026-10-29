@@ -124,7 +124,18 @@ public class WriterActivity extends Activity {
 
         @JavascriptInterface
         public boolean isBubbleOn() {
-            return BubbleService.isRunning();
+            return BubbleService.isRunning() && !BubbleService.isPaused(WriterActivity.this);
+        }
+
+        // Same encrypted API keys as the main app (see SecretStore).
+        @JavascriptInterface
+        public String getSecret(String name) {
+            return SecretStore.get(WriterActivity.this, name);
+        }
+
+        @JavascriptInterface
+        public boolean setSecret(String name, String value) {
+            return SecretStore.set(WriterActivity.this, name, value);
         }
 
         @JavascriptInterface
