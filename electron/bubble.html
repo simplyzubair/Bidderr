@@ -6,14 +6,11 @@
   <link rel="stylesheet" href="../shared/bubble.css">
 </head>
 <body>
-  <!-- Floating bubble next to the mouse: "Write proposal" -> "Writing..." -> "Paste proposal". -->
-  <div id="bubble" class="bubble offer" role="button" tabindex="-1">
-    <img class="logo" src="../branding/logo.svg" alt="">
-    <div class="text">
-      <div class="label">Write proposal</div>
-      <div class="sub"></div>
-    </div>
-    <div class="state"></div>
+  <!-- Icon-only bubble next to the mouse. The state shows on the logo: glow (write),
+       spinning ring (writing), paste badge, check badge, red badge (error). -->
+  <div id="bubble" class="mini offer" role="button" title="Write proposal">
+    <img class="mark" src="../branding/mark.svg" alt="">
+    <span class="badge"></span>
   </div>
   <script src="../shared/ui.js"></script>
   <script src="bubble.js"></script>

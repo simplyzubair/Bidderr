@@ -42,6 +42,36 @@ body { font: 14px/1.3 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system,
 .bubble.error .state { background: #f87171; color: #450a0a; }
 .bubble.error .state::before { content: '!'; }
 
+/* ---------- icon-only bubble (Windows): the round logo, the state shows on it ---------- */
+.mini {
+  position: relative; width: 48px; height: 48px; margin: 10px; border-radius: 50%; cursor: pointer;
+  animation: pop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  transition: transform 0.12s;
+}
+.mini:hover { transform: scale(1.08); }
+.mini:active { transform: scale(0.95); }
+.mini .mark { width: 48px; height: 48px; display: block; border-radius: 50%; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35)); }
+/* ring around the logo */
+.mini::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid transparent; }
+.mini.offer::before { border-color: rgba(52, 211, 153, 0.55); animation: glow 1.6s ease-in-out infinite; }
+.mini.writing { cursor: default; }
+.mini.writing::before { border-color: #34d399; border-right-color: transparent; border-bottom-color: transparent; animation: spin 0.8s linear infinite; }
+.mini.paste::before { border-color: #34d399; }
+.mini.error::before { border-color: rgba(248, 113, 113, 0.8); }
+/* small badge at the bottom right */
+.mini .badge {
+  position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%;
+  display: none; place-items: center; font: 800 12px/1 system-ui, sans-serif;
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.mini.paste .badge { display: grid; background: #022c22; color: #34d399; animation: pop 0.3s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.mini.paste .badge::before { content: '\29C9'; }
+.mini.done .badge { display: grid; background: #34d399; color: #022c22; }
+.mini.done .badge::before { content: '\2713'; }
+.mini.error .badge { display: grid; background: #f87171; color: #450a0a; }
+.mini.error .badge::before { content: '!'; }
+@keyframes glow { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes pulse { 0%, 100% { box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 0 4px rgba(16,185,129,.10); } 50% { box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 0 9px rgba(16,185,129,.22); } }

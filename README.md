@@ -17,9 +17,9 @@ The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and
 
 - Install `Bidderr-Setup.exe`. If Windows warns you, click **More info → Run anyway** (the app is not code-signed).
 - Bidderr lives in the tray, near the clock, and starts with Windows.
-- Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). A green **Write proposal**
-  bubble pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Sound 1 = writing.
-  Sound 2 = copied, and the bubble turns into **Paste proposal**: click the proposal box, then the bubble.
+- Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). The round **Bidderr bubble**
+  pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Sound 1 = writing.
+  Sound 2 = copied, and the bubble gets a paste badge: click the proposal box, then the bubble.
   The selection bubble can be turned off in the window or the tray menu.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 

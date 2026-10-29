@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.mjs",
-    "icons": "npm i --no-save sharp@0.33 && node scripts/makeIcons.js",
+    "branding": "npm i --no-save opentype.js@1 sharp@0.33 && node scripts/makeBranding.js",
     "build:exe": "electron-builder --win"
   },
   "devDependencies": {

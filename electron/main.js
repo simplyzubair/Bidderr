@@ -123,8 +123,8 @@ let bubbleHovered = false;
 
 function createBubble() {
   bubbleWindow = new BrowserWindow({
-    width: 240,
-    height: 70,
+    width: 72,
+    height: 72,
     show: false,
     frame: false,
     transparent: true,
@@ -204,6 +204,8 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
   } catch (e) {
     settingsWindow?.webContents.send('status', { kind: 'error', text: e.message, lastProposal });
     showBubble('error', 'Could not write it', e.message);
+    // The bubble is icon-only, so the reason goes in the corner box too.
+    showHud('error', 'Could not write the proposal', e.message);
     if (/API key/.test(e.message)) openSettings();
   } finally {
     busy = false;
@@ -399,8 +401,8 @@ ipcMain.on('bubble-hover', (_e, inside) => {
 });
 ipcMain.on('bubble-size', (_e, width, height) => {
   if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
-  const w = Math.min(Math.max(Math.round(width) || 0, 120), 420);
-  const h = Math.min(Math.max(Math.round(height) || 0, 50), 140);
+  const w = Math.min(Math.max(Math.round(width) || 0, 56), 420);
+  const h = Math.min(Math.max(Math.round(height) || 0, 56), 140);
   const [x, y] = bubbleWindow.getPosition();
   bubbleWindow.setBounds({ x, y, width: w, height: h });
   if (DEV) {
