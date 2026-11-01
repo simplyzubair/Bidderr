@@ -42,6 +42,12 @@ test('generateProposal sends the prompt and job to Gemini', async () => {
   assert.equal(f.calls[0].key, 'KEY');
   assert.match(f.calls[0].body.systemInstruction.parts[0].text, /Offer Summary/);
   assert.match(f.calls[0].body.contents[0].parts[0].text, /blurry logo/);
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'low');
+});
+
+test('generateProposal asks 3.5-flash-lite to think at "minimal"', async () => {
+  const f = fakeFetch([answer('Hello,\n\nBest,\nKhan')]);
+  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-3.5-flash-lite'] });
   assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'minimal');
 });
 
