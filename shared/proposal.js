@@ -9,11 +9,12 @@
   else root.Bidderr = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   // Tried in order. If one is missing or out of free quota, the next one is used.
-  // Checked against ai.google.dev/gemini-api/docs/models on 2026-10-29 (2.0 and 1.5 are shut down;
-  // 2.5 is only open to people who used it before).
-  // 3.5-flash-lite: fastest current model, thinks at "minimal" by default for near-instant responses.
-  // 3.8-flash: smarter; we ask it to think at "low" to keep it quick.
-  const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
+  // Checked against ai.google.dev/gemini-api/docs/models on 2026-10-29.
+  // 3.8-flash: Google's smartest Flash model on the free tier; thinks at "low" to stay fast while producing high-quality bids.
+  // gemini-flash-latest: points to the latest GA flash model.
+  // 3.5-flash-lite: ultra-fast fallback if 3.8 is busy or out of free quota (thinks at "minimal").
+  // 2.5-flash: legacy fallback (thinkingBudget: 0).
+  const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
 
   // A model that just failed is skipped for a while, so it doesn't cost an extra round trip on
   // every proposal: a missing model (404) for a day, a busy or out-of-quota one for a minute.
@@ -58,9 +59,9 @@
   // How much each model may "think" before writing. Less thinking = faster answer.
   function thinkingConfigFor(model) {
     if (noThinking.has(model)) return null;
-    if (model.startsWith('gemini-2.5') || model === 'gemini-flash-latest') return { thinkingBudget: 0 };
     if (model.includes('3.5-flash-lite')) return { thinkingLevel: 'minimal' };
-    if (model.startsWith('gemini-3')) return { thinkingLevel: 'low' };
+    if (model.startsWith('gemini-3') || model === 'gemini-flash-latest') return { thinkingLevel: 'low' };
+    if (model.startsWith('gemini-2.5')) return { thinkingBudget: 0 };
     return null;
   }
 
