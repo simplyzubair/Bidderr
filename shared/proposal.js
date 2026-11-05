@@ -8,13 +8,14 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Bidderr = api;
 })(typeof self !== 'undefined' ? self : this, function () {
-  // Tried in order. If one is missing or out of free quota, the next one is used.
-  // Checked against ai.google.dev/gemini-api/docs/models on 2026-10-29.
-  // 3.8-flash: Google's smartest Flash model on the free tier; thinks at "low" to stay fast while producing high-quality bids.
-  // gemini-flash-latest: points to the latest GA flash model.
-  // 3.5-flash-lite: ultra-fast fallback if 3.8 is busy or out of free quota (thinks at "minimal").
-  // 2.5-flash: legacy fallback (thinkingBudget: 0).
-  const MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+  // Tried in order. If one is missing, too slow or out of free quota, the next one is used.
+  // Checked against aistudio.google.com/docs/models, /thinking and /deprecations on 2026-11-05.
+  // 3.8-flash: Google's smartest Flash model; thinks at "low" (its lowest) to stay fast.
+  // 3.6-flash: previous Flash, stable, its own free quota (flash-latest was dropped: it is the
+  //   same model as 3.8-flash, so it failed whenever 3.8 did).
+  // 3.5-flash-lite: the fastest 3.x model, thinks at "minimal".
+  // 2.5-flash-lite: no thinking at all, last resort (2.5-flash shuts down on 2026-12-01).
+  const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
 
   // A model that just failed is skipped for a while, so it doesn't cost an extra round trip on
   // every proposal: a missing model (404) for a day, a busy or out-of-quota one for a minute.
@@ -60,7 +61,8 @@
   function thinkingConfigFor(model) {
     if (noThinking.has(model)) return null;
     if (model.includes('3.5-flash-lite')) return { thinkingLevel: 'minimal' };
-    if (model.startsWith('gemini-3') || model === 'gemini-flash-latest') return { thinkingLevel: 'low' };
+    if (model.startsWith('gemini-3')) return { thinkingLevel: 'low' };
+    if (model.startsWith('gemini-2.5-flash-lite')) return null; // thinks only when asked
     if (model.startsWith('gemini-2.5')) return { thinkingBudget: 0 };
     return null;
   }
@@ -242,10 +244,9 @@ OUTPUT RULES:
     return err;
   }
 
-  // onProgress (optional) gets the proposal so far while it is being written.
-  async function callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, onProgress, allowThinking = true) {
-    const stream = Boolean(onProgress);
-    const url = `${apiBase}/v1beta/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`;
+  // Always streams, so a slow model is noticed early. onText gets the raw answer so far.
+  async function callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, onText, signal, allowThinking = true) {
+    const url = `${apiBase}/v1beta/models/${model}:streamGenerateContent?alt=sse`;
     // Proposals are ~200-300 words (under 1000 tokens). Keeping maxOutputTokens tight speeds up model decoding.
     const genConfig = { temperature: 0.7, maxOutputTokens: 2048 };
     const thinking = allowThinking && thinkingConfigFor(model);
@@ -253,6 +254,7 @@ OUTPUT RULES:
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: prompt }] },
         contents: [{ role: 'user', parts: [{ text: `JOB POSTING:\n\n${jobText}` }] }],
@@ -266,15 +268,15 @@ OUTPUT RULES:
       // If the model rejected thinkingConfig, retry once without it
       if (res.status === 400 && genConfig.thinkingConfig && /thinking/i.test(data?.error?.message || '')) {
         noThinking.add(model);
-        return callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, onProgress, false);
+        return callGemini(model, apiKey, prompt, jobText, fetchImpl, apiBase, onText, signal, false);
       }
       await failWith(res, data);
     }
     let text = '';
-    if (stream && res.body?.getReader) {
+    if (res.body?.getReader) {
       await readEvents(res, (data) => {
         text += textOf(data);
-        if (text.trim()) onProgress(formatProposal(text));
+        if (text.trim()) onText(text);
       });
     } else {
       text = textOf(await res.json().catch(() => ({})));
@@ -284,10 +286,10 @@ OUTPUT RULES:
   }
 
   // The backup service: OpenRouter, which speaks the OpenAI chat format.
-  async function callOpenRouter(apiKey, prompt, jobText, fetchImpl, apiBase, onProgress) {
-    const stream = Boolean(onProgress);
+  async function callOpenRouter(apiKey, prompt, jobText, fetchImpl, apiBase, onText, signal) {
     const res = await fetchImpl(`${apiBase}/chat/completions`, {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`, 'X-Title': 'Bidderr' },
       body: JSON.stringify({
         model: OPENROUTER_MODEL,
@@ -298,15 +300,15 @@ OUTPUT RULES:
         temperature: 0.7,
         max_tokens: 2048,
         reasoning: { exclude: true },
-        stream,
+        stream: true,
       }),
     });
     if (!res.ok) await failWith(res);
     let text = '';
-    if (stream && res.body?.getReader) {
+    if (res.body?.getReader) {
       await readEvents(res, (data) => {
         text += data?.choices?.[0]?.delta?.content || '';
-        if (text.trim()) onProgress(formatProposal(text));
+        if (text.trim()) onText(text);
       });
     } else {
       const data = await res.json().catch(() => ({}));
@@ -316,13 +318,51 @@ OUTPUT RULES:
     return text;
   }
 
-  // Errors where trying the next model can help: model not found, out of quota, overloaded.
-  const RETRY_NEXT_MODEL = new Set([404, 429, 500, 503]);
+  // A model that shows no words for FIRST_WORD_MS, or stops for STALL_MS, is dropped for the
+  // next one (when there is a next one), instead of keeping the user waiting up to a minute.
+  const FIRST_WORD_MS = 12000;
+  const STALL_MS = 15000;
+
+  // Runs call(onText, signal) and fails with status 408 if the answer is too slow.
+  // limit: false = no time limit (the last option left, so a slow answer beats none).
+  function withTimeLimit(call, onProgress, limit) {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let timer;
+    let fail;
+    const tooSlow = new Promise((_, reject) => { fail = reject; });
+    const arm = (ms) => {
+      clearTimeout(timer);
+      if (!limit) return;
+      timer = setTimeout(() => {
+        const err = new Error('The AI was too slow to answer.');
+        err.status = 408;
+        controller?.abort();
+        fail(err);
+      }, ms);
+    };
+    let done = false;
+    const onText = (text) => {
+      if (done) return; // a dropped model must not overwrite the next one's text
+      arm(limit && limit.stallMs);
+      onProgress?.(formatProposal(text));
+    };
+    arm(limit && limit.firstWordMs);
+    const answer = call(onText, controller?.signal);
+    answer.catch(() => {}); // after a time-out its own error no longer matters
+    return Promise.race([answer, tooSlow]).finally(() => {
+      done = true;
+      clearTimeout(timer);
+    });
+  }
+
+  // Errors where trying the next model can help: model not found, too slow, out of quota, overloaded.
+  const RETRY_NEXT_MODEL = new Set([404, 408, 429, 500, 503]);
   const isGoogleKeyProblem = (e) => e?.status === 403 || (e?.status === 400 && /api.?key/i.test(e.message));
 
   function friendlyGoogleError(e) {
     if (isGoogleKeyProblem(e)) return new Error('Google did not accept the API key. Please check it.');
     if (e?.status === 429) return new Error('Free limit reached for now. Wait a minute and try again.');
+    if (e?.status === 408) return new Error('The AI is slow right now. Please try again.');
     return e;
   }
 
@@ -330,6 +370,7 @@ OUTPUT RULES:
     if (e?.status === 401 || e?.status === 403) return 'OpenRouter did not accept the backup key.';
     if (e?.status === 402) return 'OpenRouter says the account needs credit.';
     if (e?.status === 429) return 'OpenRouter free limit reached for now.';
+    if (e?.status === 408) return 'OpenRouter was too slow to answer.';
     return String(e?.message || 'Unknown error');
   }
 
@@ -338,6 +379,7 @@ OUTPUT RULES:
   async function generateProposal(jobText, apiKey, {
     prompt, fetchImpl = fetch, models = MODELS, apiBase = GOOGLE_API,
     backupKey = '', backupBase = OPENROUTER_API, onProgress, log = () => {},
+    firstWordMs = FIRST_WORD_MS, stallMs = STALL_MS,
   } = {}) {
     const job = String(jobText || '').trim();
     if (!apiKey && !backupKey) throw new Error('No API key yet. Open Settings and paste your free Google key.');
@@ -347,11 +389,16 @@ OUTPUT RULES:
 
     let googleError = null;
     if (apiKey) {
-      for (const model of modelOrder(models)) {
+      const order = modelOrder(models);
+      for (const [i, model] of order.entries()) {
         const started = Date.now();
+        const isLast = i === order.length - 1 && !backupKey;
         try {
           onProgress?.(''); // a new attempt starts from an empty box
-          const text = await callGemini(model, apiKey, systemPrompt, jobPart, fetchImpl, apiBase, onProgress);
+          const text = await withTimeLimit(
+            (onText, signal) => callGemini(model, apiKey, systemPrompt, jobPart, fetchImpl, apiBase, onText, signal),
+            onProgress, !isLast && { firstWordMs, stallMs },
+          );
           log(`[ai] ${model} answered in ${Date.now() - started} ms`);
           if (resting[model]) restModel(model, 0);
           return formatProposal(text);
@@ -370,7 +417,10 @@ OUTPUT RULES:
     const started = Date.now();
     try {
       onProgress?.('');
-      const text = await callOpenRouter(backupKey, systemPrompt, jobPart, fetchImpl, backupBase, onProgress);
+      const text = await withTimeLimit(
+        (onText, signal) => callOpenRouter(backupKey, systemPrompt, jobPart, fetchImpl, backupBase, onText, signal),
+        onProgress, false,
+      );
       log(`[ai] OpenRouter answered in ${Date.now() - started} ms`);
       return formatProposal(text);
     } catch (e) {

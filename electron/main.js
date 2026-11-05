@@ -441,7 +441,10 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
     // While the window is open, the proposal shows up there as it is written.
     const onProgress = settingsWindow ? (text) => settingsWindow?.webContents.send('progress', text) : undefined;
     // Every AI request gets the Stop signal, so Stop ends it at once.
-    const fetchImpl = (url, options) => fetch(url, { ...options, signal: stop.signal });
+    // Stop button + the engine's own "this model is too slow" signal.
+    const fetchImpl = (url, options) => fetch(url, {
+      ...options, signal: options?.signal ? AbortSignal.any([stop.signal, options.signal]) : stop.signal,
+    });
     const proposal = await generateProposal(job, getApiKey(), {
       prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress, log, fetchImpl,
     });

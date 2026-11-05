@@ -236,3 +236,40 @@ test('addToHistory keeps the newest 30, newest first', () => {
   assert.equal(h[0].profile, 'embroidery');
   assert.deepEqual(addToHistory('broken', 'j', 'p').length, 1);
 });
+
+test('a model that shows no words in time is dropped for the next one', async () => {
+  const urls = [];
+  const fetchImpl = (url, init) => {
+    urls.push(url);
+    if (url.includes('slow-model')) {
+      // never answers until aborted
+      return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => answer('Fast answer').body });
+  };
+  const logs = [];
+  const out = await generateProposal(JOB, 'KEY', {
+    fetchImpl, models: ['slow-model', 'fast-model'], firstWordMs: 30, log: (l) => logs.push(l),
+  });
+  assert.equal(out, 'Fast answer');
+  assert.equal(urls.length, 2);
+  assert.match(logs[0], /slow-model failed .* 408/);
+  // the slow model rests, so the next proposal starts with the fast one
+  urls.length = 0;
+  await generateProposal(JOB, 'KEY', { fetchImpl, models: ['slow-model', 'fast-model'], firstWordMs: 30 });
+  assert.match(urls[0], /fast-model/);
+});
+
+test('the last model left has no time limit, so a slow answer still arrives', async () => {
+  const fetchImpl = () => new Promise((resolve) => setTimeout(
+    () => resolve({ ok: true, status: 200, json: async () => answer('Slow but here').body }), 60));
+  const out = await generateProposal(JOB, 'KEY', { fetchImpl, models: ['only-model'], firstWordMs: 10 });
+  assert.equal(out, 'Slow but here');
+});
+
+test('the newest models think as little as they allow; 2.5-flash-lite gets no thinking setting', async () => {
+  const f = fakeFetch(MODELS.map(() => ({ status: 503, body: {} })));
+  await assert.rejects(generateProposal(JOB, 'KEY', { fetchImpl: f }));
+  const levels = f.calls.map((c) => c.body.generationConfig.thinkingConfig?.thinkingLevel ?? 'none');
+  assert.deepEqual(levels, ['low', 'low', 'minimal', 'none']);
+});
