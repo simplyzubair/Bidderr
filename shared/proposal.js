@@ -34,8 +34,11 @@
   } catch {
     resting = {};
   }
-  function restModel(model, status) {
-    if (status) resting[model] = Date.now() + (status === 404 ? 24 * 3600e3 : 60e3);
+  // A used-up daily quota (429 "per day") rests for an hour; a per-minute limit or a busy model
+  // for a minute.
+  function restModel(model, status, message = '') {
+    const dailyQuota = status === 429 && /per.?day|daily/i.test(message);
+    if (status) resting[model] = Date.now() + (status === 404 ? 24 * 3600e3 : dailyQuota ? 3600e3 : 60e3);
     else delete resting[model];
     try {
       pageStorage()?.setItem(RESTING_KEY, JSON.stringify(resting));
@@ -203,6 +206,14 @@ OUTPUT RULES:
   const OPENROUTER_API = 'https://openrouter.ai/api/v1';
   // OpenRouter's router that picks one of its free models (Llama, Gemma, DeepSeek...) for each request.
   const OPENROUTER_MODEL = 'openrouter/free';
+  // Groq: free key (no card) and very fast. Its free models, checked on
+  // console.groq.com/docs/models on 2026-11-06 (its Llama models were shut down for free keys).
+  // They think before writing; "low" keeps that short and the thinking is left out of the answer.
+  const GROQ_API = 'https://api.groq.com/openai/v1';
+  const GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+  // The backup key box takes either service; Groq keys start with "gsk_".
+  const isGroqKey = (key) => /^gsk_/.test(String(key || '').trim());
+  const backupName = (key) => (isGroqKey(key) ? 'Groq' : 'OpenRouter');
 
   // Reads a "server-sent events" answer piece by piece and calls onData with each JSON message.
   async function readEvents(res, onData) {
@@ -285,21 +296,21 @@ OUTPUT RULES:
     return text;
   }
 
-  // The backup service: OpenRouter, which speaks the OpenAI chat format.
-  async function callOpenRouter(apiKey, prompt, jobText, fetchImpl, apiBase, onText, signal) {
+  // The backup services (Groq or OpenRouter) speak the OpenAI chat format.
+  // options: the model and its service-specific settings.
+  async function callChat(apiKey, prompt, jobText, fetchImpl, apiBase, onText, signal, options) {
     const res = await fetchImpl(`${apiBase}/chat/completions`, {
       method: 'POST',
       signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`, 'X-Title': 'Bidderr' },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        ...options,
         messages: [
           { role: 'system', content: prompt },
           { role: 'user', content: `JOB POSTING:\n\n${jobText}` },
         ],
         temperature: 0.7,
         max_tokens: 2048,
-        reasoning: { exclude: true },
         stream: true,
       }),
     });
@@ -320,7 +331,7 @@ OUTPUT RULES:
 
   // A model that shows no words for FIRST_WORD_MS, or stops for STALL_MS, is dropped for the
   // next one (when there is a next one), instead of keeping the user waiting up to a minute.
-  const FIRST_WORD_MS = 12000;
+  const FIRST_WORD_MS = 8000;
   const STALL_MS = 15000;
 
   // Runs call(onText, signal) and fails with status 408 if the answer is too slow.
@@ -366,19 +377,30 @@ OUTPUT RULES:
     return e;
   }
 
-  function friendlyBackupError(e) {
-    if (e?.status === 401 || e?.status === 403) return 'OpenRouter did not accept the backup key.';
-    if (e?.status === 402) return 'OpenRouter says the account needs credit.';
-    if (e?.status === 429) return 'OpenRouter free limit reached for now.';
-    if (e?.status === 408) return 'OpenRouter was too slow to answer.';
+  function friendlyBackupError(e, name) {
+    if (e?.status === 401 || e?.status === 403) return `${name} did not accept the backup key.`;
+    if (e?.status === 402) return `${name} says the account needs credit.`;
+    if (e?.status === 429) return `${name} free limit reached for now.`;
+    if (e?.status === 408) return `${name} was too slow to answer.`;
     return String(e?.message || 'Unknown error');
   }
 
-  // apiKey: Google key. backupKey (optional): OpenRouter key, used when Google fails or has no key.
+  // The backup's attempts: Groq tries its models in turn, OpenRouter picks a free model itself.
+  function backupAttempts(backupKey, backupBase, groqBase) {
+    if (isGroqKey(backupKey)) {
+      return GROQ_MODELS.map((model) => ({
+        name: `Groq ${model}`, base: groqBase,
+        options: { model, reasoning_effort: 'low', include_reasoning: false },
+      }));
+    }
+    return [{ name: 'OpenRouter', base: backupBase, options: { model: OPENROUTER_MODEL, reasoning: { exclude: true } } }];
+  }
+
+  // apiKey: Google key. backupKey (optional): Groq or OpenRouter key, used when Google fails or has no key.
   // onProgress (optional): called with the proposal so far, so the app can show it while it is written.
   async function generateProposal(jobText, apiKey, {
     prompt, fetchImpl = fetch, models = MODELS, apiBase = GOOGLE_API,
-    backupKey = '', backupBase = OPENROUTER_API, onProgress, log = () => {},
+    backupKey = '', backupBase = OPENROUTER_API, groqBase = GROQ_API, onProgress, log = () => {},
     firstWordMs = FIRST_WORD_MS, stallMs = STALL_MS,
   } = {}) {
     const job = String(jobText || '').trim();
@@ -404,7 +426,7 @@ OUTPUT RULES:
           return formatProposal(text);
         } catch (e) {
           log(`[ai] ${model} failed after ${Date.now() - started} ms: ${e.status || ''} ${e.message}`);
-          if (RETRY_NEXT_MODEL.has(e.status)) restModel(model, e.status);
+          if (RETRY_NEXT_MODEL.has(e.status)) restModel(model, e.status, e.message);
           googleError = e;
           // A bad key fails for every model, so stop. Other errors (model missing, busy, out of
           // free quota, model can't do this request) may work with the next model.
@@ -414,21 +436,28 @@ OUTPUT RULES:
       if (!backupKey) throw friendlyGoogleError(googleError);
     }
 
-    const started = Date.now();
-    try {
-      onProgress?.('');
-      const text = await withTimeLimit(
-        (onText, signal) => callOpenRouter(backupKey, systemPrompt, jobPart, fetchImpl, backupBase, onText, signal),
-        onProgress, false,
-      );
-      log(`[ai] OpenRouter answered in ${Date.now() - started} ms`);
-      return formatProposal(text);
-    } catch (e) {
-      log(`[ai] OpenRouter failed after ${Date.now() - started} ms: ${e.message}`);
-      const backup = friendlyBackupError(e);
-      if (!googleError) throw new Error(backup);
-      throw new Error(`${friendlyGoogleError(googleError).message} The OpenRouter backup also failed: ${backup}`);
+    const name = backupName(backupKey);
+    const attempts = backupAttempts(backupKey, backupBase, groqBase);
+    let backupError = null;
+    for (const [i, attempt] of attempts.entries()) {
+      const started = Date.now();
+      try {
+        onProgress?.('');
+        const text = await withTimeLimit(
+          (onText, signal) => callChat(backupKey, systemPrompt, jobPart, fetchImpl, attempt.base, onText, signal, attempt.options),
+          onProgress, i < attempts.length - 1 && { firstWordMs, stallMs },
+        );
+        log(`[ai] ${attempt.name} answered in ${Date.now() - started} ms`);
+        return formatProposal(text);
+      } catch (e) {
+        log(`[ai] ${attempt.name} failed after ${Date.now() - started} ms: ${e.status || ''} ${e.message}`);
+        backupError = e;
+        if (!(RETRY_NEXT_MODEL.has(e.status) || e.status === 400)) break; // a bad key fails for every model
+      }
     }
+    const backup = friendlyBackupError(backupError, name);
+    if (!googleError) throw new Error(backup);
+    throw new Error(`${friendlyGoogleError(googleError).message} The ${name} backup also failed: ${backup}`);
   }
 
   // Asks Google if the key works (a free call that lists models). Returns 'ok', 'invalid' or 'offline'.
@@ -446,12 +475,13 @@ OUTPUT RULES:
     }
   }
 
-  // The same check for an OpenRouter backup key (a free call that describes the key).
-  async function checkBackupKey(apiKey, { fetchImpl = fetch, apiBase = OPENROUTER_API } = {}) {
+  // The same check for a backup key (free calls: Groq lists its models, OpenRouter describes the key).
+  async function checkBackupKey(apiKey, { fetchImpl = fetch, apiBase = OPENROUTER_API, groqBase = GROQ_API } = {}) {
     const key = String(apiKey || '').trim();
     if (!key) return 'invalid';
     try {
-      const res = await fetchImpl(`${apiBase}/key`, { headers: { Authorization: `Bearer ${key}` } });
+      const url = isGroqKey(key) ? `${groqBase}/models` : `${apiBase}/key`;
+      const res = await fetchImpl(url, { headers: { Authorization: `Bearer ${key}` } });
       if (res.ok) return 'ok';
       return res.status === 400 || res.status === 401 || res.status === 403 ? 'invalid' : 'offline';
     } catch {
@@ -480,7 +510,7 @@ OUTPUT RULES:
   }
 
   return {
-    MODELS, PROFILES, DEFAULT_PROFILE, DEFAULT_PROMPT, OPENROUTER_MODEL, defaultPromptFor,
+    MODELS, PROFILES, DEFAULT_PROFILE, DEFAULT_PROMPT, OPENROUTER_MODEL, GROQ_MODELS, backupName, defaultPromptFor,
     toUnicodeBold, formatProposal, generateProposal, checkApiKey, checkBackupKey, maskKey, addToHistory,
     forgetFailedModels,
   };

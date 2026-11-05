@@ -54,7 +54,7 @@ $('key').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') saveKey();
 });
 
-// ---------- backup key (OpenRouter) ----------
+// ---------- backup key (Groq or OpenRouter) ----------
 
 function showBackup({ hasBackupKey: has, maskedBackupKey }) {
   hasBackupKey = has;
@@ -71,14 +71,14 @@ $('toggle-backup').addEventListener('click', () => {
 $('save-backup').addEventListener('click', async () => {
   const key = $('backup-key').value.trim();
   if (!key) {
-    setNote($('backup-note'), 'Paste your OpenRouter key in the box first.', 'error');
+    setNote($('backup-note'), 'Paste your Groq or OpenRouter key in the box first.', 'error');
     return;
   }
-  const done = busyButton($('save-backup'), 'Checking with OpenRouter...');
+  const done = busyButton($('save-backup'), 'Checking the key...');
   const result = await window.bidderr.saveBackupKey(key);
   done();
   if (result.state === 'invalid') {
-    setNote($('backup-note'), 'OpenRouter says this key does not work. It was NOT saved.', 'error');
+    setNote($('backup-note'), 'This key does not work. It was NOT saved.', 'error');
     return;
   }
   if (result.state === 'error') {
@@ -89,13 +89,13 @@ $('save-backup').addEventListener('click', async () => {
   showBackup(result);
   const offline = result.state === 'offline';
   setNote($('backup-note'), offline
-    ? 'Saved, but OpenRouter could not be reached to test it.'
+    ? 'Saved, but the backup service could not be reached to test it.'
     : 'Backup key saved and working. It is used only when Google fails.', offline ? 'warn' : 'ok');
   toast('Backup key saved');
 });
 
 $('remove-backup').addEventListener('click', async () => {
-  if (!confirm('Remove the OpenRouter backup key?')) return;
+  if (!confirm('Remove the backup key?')) return;
   showBackup(await window.bidderr.removeBackupKey());
   setNote($('backup-note'), 'Backup key removed.', '');
 });

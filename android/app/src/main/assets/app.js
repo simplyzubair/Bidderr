@@ -60,7 +60,7 @@ $('save-key').addEventListener('click', async () => {
   }
 });
 
-// ---------- backup key (OpenRouter) ----------
+// ---------- backup key (Groq or OpenRouter) ----------
 
 function showBackup() {
   const key = store.backupKey;
@@ -77,14 +77,14 @@ $('toggle-backup').addEventListener('click', () => {
 $('save-backup').addEventListener('click', async () => {
   const key = $('backup-key').value.trim();
   if (!key) {
-    setNote($('backup-note'), 'Paste your OpenRouter key in the box first.', 'error');
+    setNote($('backup-note'), 'Paste your Groq or OpenRouter key in the box first.', 'error');
     return;
   }
-  const done = busyButton($('save-backup'), 'Checking with OpenRouter...');
+  const done = busyButton($('save-backup'), 'Checking the key...');
   const check = await checkBackupKey(key);
   done();
   if (check === 'invalid') {
-    setNote($('backup-note'), 'OpenRouter says this key does not work. It was NOT saved.', 'error');
+    setNote($('backup-note'), 'This key does not work. It was NOT saved.', 'error');
     return;
   }
   store.backupKey = key;
@@ -92,13 +92,13 @@ $('save-backup').addEventListener('click', async () => {
   showBackup();
   showKey();
   setNote($('backup-note'), check === 'offline'
-    ? 'Saved, but OpenRouter could not be reached to test it.'
+    ? 'Saved, but the backup service could not be reached to test it.'
     : 'Backup key saved and working. It is used only when Google fails.', check === 'offline' ? 'warn' : 'ok');
   toast('Backup key saved');
 });
 
 $('remove-backup').addEventListener('click', () => {
-  if (!confirm('Remove the OpenRouter backup key?')) return;
+  if (!confirm('Remove the backup key?')) return;
   store.backupKey = '';
   showBackup();
   showKey();
@@ -215,8 +215,16 @@ function refreshBubbleCard() {
   if ($('bubble-pill')) {
     setNote($('bubble-pill'), on ? 'Active' : 'Off', on ? 'ok' : '');
   }
+  // Remember that the user wanted the bubble, so we can warn when Android turns it off.
+  if (on) localStorage.setItem('bidderr.bubbleWanted', '1');
+  $('bubble-off-card').classList.toggle('hidden', on || !localStorage.getItem('bidderr.bubbleWanted'));
 }
 $('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
+$('bubble-on-again').addEventListener('click', () => window.Android?.openBubbleSettings());
+$('bubble-off-ok').addEventListener('click', () => {
+  localStorage.removeItem('bidderr.bubbleWanted');
+  refreshBubbleCard();
+});
 // Android 13+ blocks the bubble for apps not from the Play Store until this is allowed.
 $('app-info').addEventListener('click', () => window.Android?.openAppInfo());
 // Coming back to the app: refresh the bubble card and look for a new version.

@@ -13,7 +13,7 @@ Download: **https://bidderr.skillsgeek.com**
 
 The key is saved on this device only (encrypted), so set it up separately on each computer or phone. The free key has a daily limit. If you hit it, Bidderr tells you; wait a bit and try again.
 
-**Optional backup:** add a free OpenRouter key (https://openrouter.ai/keys) under **Backup AI**. When Google is busy or out of free quota, Bidderr uses one of OpenRouter's free models instead.
+**Optional backup:** add a free Groq key (https://console.groq.com/keys, fastest, no card) or an OpenRouter key (https://openrouter.ai/keys) under **Backup AI**. When Google is busy, slow or out of free quota, Bidderr uses the backup instead.
 
 ## 2. Windows
 

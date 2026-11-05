@@ -76,7 +76,7 @@ function saveApiKey(key) {
   saveSettings({ apiKey: encrypt(key) });
 }
 
-// Optional OpenRouter key, used when Google fails. Encrypted the same way.
+// Optional backup key (Groq or OpenRouter), used when Google fails. Encrypted the same way.
 const getBackupKey = () => decrypt(loadSettings().backupKey);
 
 // ---------- work profiles (Vector Tracing, Embroidery Digitizing, General Design) ----------
@@ -615,9 +615,9 @@ function openSettings() {
     },
   });
   settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
-  // Links open in the normal browser, and only the Google and OpenRouter key pages are allowed.
+  // Links open in the normal browser, and only the Google, Groq and OpenRouter key pages are allowed.
   settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://aistudio.google.com/') || url.startsWith('https://openrouter.ai/')) shell.openExternal(url);
+    if (['https://aistudio.google.com/', 'https://console.groq.com/', 'https://openrouter.ai/'].some((site) => url.startsWith(site))) shell.openExternal(url);
     return { action: 'deny' };
   });
   settingsWindow.on('closed', () => {
@@ -703,7 +703,7 @@ ipcMain.handle('save-prompt', (_e, id, prompt) => {
   return profilesView();
 });
 
-// Same rules as the Google key: tested first, never saved if OpenRouter rejects it.
+// Same rules as the Google key: tested first, never saved if the backup service rejects it.
 ipcMain.handle('save-backup-key', async (_e, key) => {
   const newKey = String(key || '').trim().slice(0, 200);
   if (!newKey) return { state: 'invalid', ...backupState() };

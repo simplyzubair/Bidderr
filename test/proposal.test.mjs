@@ -221,6 +221,63 @@ test('only a backup key is enough; both failing gives one clear message', async 
   );
 });
 
+test('a Groq backup key (gsk_) uses Groq, and its second model when the first is busy', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, auth: init.headers.Authorization, body });
+    if (url.includes('googleapis')) return { ok: false, status: 503, json: async () => ({ error: { message: 'busy' } }) };
+    if (body.model === 'openai/gpt-oss-120b') return { ok: false, status: 429, json: async () => ({ error: { message: 'rate' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Hello from Groq' } }] }) };
+  };
+  const logs = [];
+  const out = await generateProposal(JOB, 'KEY', { fetchImpl, models: ['gemini-x'], backupKey: 'gsk_1', log: (l) => logs.push(l) });
+  assert.equal(out, 'Hello from Groq');
+  const groq = calls.filter((c) => c.url.includes('api.groq.com'));
+  assert.deepEqual(groq.map((c) => c.body.model), ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']);
+  assert.match(groq[0].url, /api\.groq\.com\/openai\/v1\/chat\/completions$/);
+  assert.equal(groq[0].auth, 'Bearer gsk_1');
+  assert.equal(groq[0].body.reasoning_effort, 'low');
+  assert.equal(groq[0].body.include_reasoning, false);
+  assert.equal(groq[0].body.reasoning, undefined); // OpenRouter-only setting
+  assert.ok(logs.some((l) => /Groq openai\/gpt-oss-20b answered/.test(l)));
+});
+
+test('a bad Groq key names Groq in the message', async () => {
+  const fail = async (url) => ({ ok: false, status: url.includes('groq') ? 401 : 429, json: async () => ({ error: { message: 'no' } }) });
+  await assert.rejects(
+    generateProposal(JOB, 'KEY', { fetchImpl: fail, models: ['gemini-x'], backupKey: 'gsk_bad' }),
+    /Groq backup also failed: Groq did not accept the backup key/,
+  );
+});
+
+test('checkBackupKey tests a Groq key with Groq, an OpenRouter key with OpenRouter', async () => {
+  const urls = [];
+  const fetchImpl = async (url) => { urls.push(url); return { ok: true, status: 200 }; };
+  assert.equal(await checkBackupKey('gsk_1', { fetchImpl }), 'ok');
+  assert.equal(await checkBackupKey('sk-or-1', { fetchImpl }), 'ok');
+  assert.deepEqual(urls, ['https://api.groq.com/openai/v1/models', 'https://openrouter.ai/api/v1/key']);
+});
+
+test('a used-up daily quota rests the model longer than a per-minute limit', async () => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    if (url.includes('daily-model')) return { ok: false, status: 429, json: async () => ({ error: { message: 'Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier' } }) };
+    return { ok: true, status: 200, json: async () => answer('Hi').body };
+  };
+  await generateProposal(JOB, 'KEY', { fetchImpl, models: ['daily-model', 'other-model'] });
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 5 * 60e3; // 5 minutes later: a per-minute limit would be over
+    urls.length = 0;
+    await generateProposal(JOB, 'KEY', { fetchImpl, models: ['daily-model', 'other-model'] });
+    assert.match(urls[0], /other-model/);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('checkBackupKey reports ok and invalid', async () => {
   assert.equal(await checkBackupKey('sk', { fetchImpl: async () => ({ ok: true, status: 200 }) }), 'ok');
   assert.equal(await checkBackupKey('sk', { fetchImpl: async () => ({ ok: false, status: 401 }) }), 'invalid');
