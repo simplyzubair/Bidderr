@@ -1,0 +1,64 @@
+/* The action ring: right-click on the bubble. 8 round buttons on a circle (radius 82 px)
+   around a close button, in a 236 x 236 window. Buttons go clockwise from the top. */
+body.ring-open #bubble { display: none; }
+
+.ring { position: relative; width: 236px; height: 236px; }
+.ring[hidden] { display: none; }
+
+.ring button {
+  position: absolute; width: 44px; height: 44px; padding: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: #1f2937;
+  background: #f3f4f6; border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  transition: background 0.12s, color 0.12s, transform 0.12s;
+  animation: ring-pop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+.ring button:hover { background: #34d399; color: #022c22; transform: scale(1.1); }
+.ring button:active { transform: scale(0.94); }
+.ring button.off, .ring button.off:hover { cursor: default; color: #9ca3af; background: #e5e7eb; transform: none; }
+.ring button[data-action="quit"]:hover { background: #f87171; color: #450a0a; }
+
+.ring button:nth-child(1) { left: 96px;  top: 14px;  animation-delay: 0ms; }
+.ring button:nth-child(2) { left: 154px; top: 38px;  animation-delay: 15ms; }
+.ring button:nth-child(3) { left: 178px; top: 96px;  animation-delay: 30ms; }
+.ring button:nth-child(4) { left: 154px; top: 154px; animation-delay: 45ms; }
+.ring button:nth-child(5) { left: 96px;  top: 178px; animation-delay: 60ms; }
+.ring button:nth-child(6) { left: 38px;  top: 154px; animation-delay: 75ms; }
+.ring button:nth-child(7) { left: 14px;  top: 96px;  animation-delay: 90ms; }
+.ring button:nth-child(8) { left: 38px;  top: 38px;  animation-delay: 105ms; }
+
+.ring button.center {
+  left: 98px; top: 98px; width: 40px; height: 40px;
+  background: #fb7185; color: #fff; border-color: rgba(255, 255, 255, 0.6);
+}
+.ring button.center:hover { background: #f43f5e; color: #fff; }
+
+/* The name of the button under the mouse, just below the centre. */
+.ring-label {
+  position: absolute; left: 50%; top: 143px; transform: translateX(-50%);
+  max-width: 70px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 600 10.5px/1.4 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  background: rgba(10, 15, 28, 0.88); color: #f9fafb; pointer-events: none;
+}
+.ring-label:empty { display: none; }
+
+/* Icons are black-line SVGs used as masks, so they take the button's text colour. */
+.ico { width: 20px; height: 20px; background: currentColor; -webkit-mask: center / 20px 20px no-repeat; mask: center / 20px 20px no-repeat; }
+.ico-stop { -webkit-mask-image: url(ring-icons/stop.svg); mask-image: url(ring-icons/stop.svg); }
+.ico-copy { -webkit-mask-image: url(ring-icons/copy.svg); mask-image: url(ring-icons/copy.svg); }
+.ico-settings { -webkit-mask-image: url(ring-icons/settings.svg); mask-image: url(ring-icons/settings.svg); }
+.ico-pin { -webkit-mask-image: url(ring-icons/pin.svg); mask-image: url(ring-icons/pin.svg); }
+.ico-unpin { -webkit-mask-image: url(ring-icons/unpin.svg); mask-image: url(ring-icons/unpin.svg); }
+.ico-restart { -webkit-mask-image: url(ring-icons/restart.svg); mask-image: url(ring-icons/restart.svg); }
+.ico-quit { -webkit-mask-image: url(ring-icons/quit.svg); mask-image: url(ring-icons/quit.svg); }
+.ico-hide { -webkit-mask-image: url(ring-icons/hide.svg); mask-image: url(ring-icons/hide.svg); }
+.ico-snooze { -webkit-mask-image: url(ring-icons/snooze.svg); mask-image: url(ring-icons/snooze.svg); }
+.ico-close { -webkit-mask-image: url(ring-icons/close.svg); mask-image: url(ring-icons/close.svg); width: 16px; height: 16px; -webkit-mask-size: 16px; mask-size: 16px; }
+
+@keyframes ring-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Bubble states that only Windows has: resting (pinned) and stopped. */
+.mini.idle::before { border-color: rgba(52, 211, 153, 0.35); }
+.mini.stopped::before { border-color: rgba(148, 163, 184, 0.8); }
+.mini.stopped .badge { display: grid; background: #e5e7eb; color: #334155; }
+.mini.stopped .badge::before { content: '\25A0'; font-size: 9px; }

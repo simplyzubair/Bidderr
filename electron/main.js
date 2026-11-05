@@ -13,6 +13,8 @@ const { copySelection, pasteClipboard } = require('./copySelection.js');
 const { startSelectionWatch } = require('./selectionWatch.js');
 
 const DEFAULT_HOTKEY = 'Ctrl+Shift+1';
+// Shows / hides the bubble. Three modifiers, so it does not clash with other apps.
+const BUBBLE_HOTKEY = 'Ctrl+Alt+Shift+B';
 const ICON = path.join(__dirname, '../public/icon.png');
 const TRAY_ICON = path.join(__dirname, '../public/tray.png');
 
@@ -28,6 +30,7 @@ let hudTimer = null;
 let hudKind = '';
 let busy = false;
 let lastProposal = '';
+let stopController = null; // aborts the proposal being written (the ring's Stop button)
 
 function log(message) {
   if (!DEV) return;
@@ -199,19 +202,42 @@ function createBubble() {
   bubbleWindow.loadFile(path.join(__dirname, 'bubble.html'));
 }
 
-const BUBBLE_HIDE_AFTER = { offer: 4500, done: 1500, error: 8000, paste: 3 * 60 * 1000 };
+const BUBBLE_HIDE_AFTER = { idle: 4500, offer: 4500, done: 1500, stopped: 1500, error: 8000, paste: 3 * 60 * 1000 };
+
+// A pinned bubble stays in one spot (window x,y) and never goes away; otherwise it follows the mouse.
+function pinnedAt() {
+  const pin = loadSettings().bubblePin;
+  return pin && Number.isFinite(pin.x) && Number.isFinite(pin.y) ? pin : null;
+}
+
+// "Pause 30 min" in the ring: no bubble until then (only in memory, a restart ends it).
+let snoozeUntil = 0;
+let snoozeTimer = null;
+const bubbleAllowed = () => selectionBubbleOn() && Date.now() >= snoozeUntil;
 
 function scheduleBubbleHide() {
   clearTimeout(bubbleTimer);
+  if (ring || (bubbleState === 'idle' && pinnedAt())) return;
   const ms = BUBBLE_HIDE_AFTER[bubbleState];
   if (ms && !bubbleHovered) bubbleTimer = setTimeout(hideBubble, ms);
 }
 
+// Timed hide: a pinned bubble goes back to its resting look instead of disappearing.
 function hideBubble() {
+  if (pinnedAt() && bubbleAllowed()) showIdle();
+  else closeBubble();
+}
+
+function closeBubble() {
   clearTimeout(bubbleTimer);
   bubbleState = '';
+  if (ring) closeRing();
   if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
 }
+
+const showIdle = () => showBubble('idle', 'Bidderr', 'Select a job post, then click here. Right-click for more.');
+
+let lastBubbleMessage = null;
 
 // at: screen point to show the bubble next to; without it the bubble stays where it is.
 function showBubble(state, label, sub = '', { sound = '', at = null } = {}) {
@@ -219,18 +245,171 @@ function showBubble(state, label, sub = '', { sound = '', at = null } = {}) {
   bubbleState = state;
   tray?.setToolTip(`Bidderr - ${label}`);
   if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
-  if (at || !bubbleWindow.isVisible()) {
-    const point = at || screen.getCursorScreenPoint();
-    const { workArea } = screen.getDisplayNearestPoint(point);
+  const pin = pinnedAt();
+  if (ring && !pin && at) closeRing(); // a new selection somewhere else
+  if (!ring && (pin || at || !bubbleWindow.isVisible())) {
     const [w, h] = bubbleWindow.getSize();
+    const point = pin || at || screen.getCursorScreenPoint();
+    const gap = pin ? 0 : 14;
+    const { workArea } = screen.getDisplayNearestPoint(point);
     bubbleWindow.setPosition(
-      Math.round(Math.min(Math.max(point.x + 14, workArea.x), workArea.x + workArea.width - w)),
-      Math.round(Math.min(Math.max(point.y + 14, workArea.y), workArea.y + workArea.height - h)),
+      Math.round(Math.min(Math.max(point.x + gap, workArea.x), workArea.x + workArea.width - w)),
+      Math.round(Math.min(Math.max(point.y + gap, workArea.y), workArea.y + workArea.height - h)),
     );
   }
-  bubbleWindow.webContents.send('bubble', { state, label, sub, sound });
+  lastBubbleMessage = { state, label, sub };
+  if (!ring) bubbleWindow.webContents.send('bubble', { state, label, sub, sound });
+  else if (sound) bubbleWindow.webContents.send('bubble-sound', sound);
   bubbleWindow.showInactive(); // never steal focus from the page the user is on
   scheduleBubbleHide();
+}
+
+// ---------- the action ring (right-click on the bubble) ----------
+// The bubble window grows into a ring of round buttons around the bubble's centre.
+
+const RING_SIZE = 236;
+let ring = null; // the bubble's bounds before the ring opened, while it is open
+
+function ringState() {
+  return {
+    busy,
+    pinned: Boolean(pinnedAt()),
+    snoozed: Date.now() < snoozeUntil,
+    hasProposal: Boolean(lastProposal),
+    bubbleHotkey: BUBBLE_HOTKEY,
+  };
+}
+
+function openRing() {
+  if (ring || !bubbleWindow || bubbleWindow.isDestroyed() || !bubbleWindow.isVisible()) return;
+  clearTimeout(bubbleTimer);
+  ring = bubbleWindow.getBounds();
+  const cx = ring.x + ring.width / 2;
+  const cy = ring.y + ring.height / 2;
+  const { workArea } = screen.getDisplayNearestPoint({ x: Math.round(cx), y: Math.round(cy) });
+  bubbleWindow.setBounds({
+    x: Math.round(Math.min(Math.max(cx - RING_SIZE / 2, workArea.x), workArea.x + workArea.width - RING_SIZE)),
+    y: Math.round(Math.min(Math.max(cy - RING_SIZE / 2, workArea.y), workArea.y + workArea.height - RING_SIZE)),
+    width: RING_SIZE,
+    height: RING_SIZE,
+  });
+  bubbleWindow.webContents.send('ring', { open: true, ...ringState() });
+  // Screen pixels of the ring, for the end-to-end test to click on.
+  const r = DEV ? screen.dipToScreenRect(bubbleWindow, bubbleWindow.getBounds()) : {};
+  log(`[ring] open ${r.x},${r.y},${r.width},${r.height}`);
+}
+
+function closeRing() {
+  if (!ring) return;
+  const before = ring;
+  ring = null;
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.setBounds(before);
+    bubbleWindow.webContents.send('ring', { open: false });
+    if (lastBubbleMessage) bubbleWindow.webContents.send('bubble', lastBubbleMessage);
+  }
+  scheduleBubbleHide();
+}
+
+function stopWriting() {
+  if (!busy || !stopController) return;
+  log('[action] stop');
+  stopController.abort();
+}
+
+// Hide / show the bubble (ring, Ctrl+Alt+Shift+B, tray menu, Bidderr window).
+function setBubbleShown(on, { tell = true } = {}) {
+  saveSettings({ selectionBubble: on });
+  snoozeUntil = 0;
+  clearTimeout(snoozeTimer);
+  settingsWindow?.webContents.send('selection-bubble', on);
+  tray?.setContextMenu(buildTrayMenu());
+  if (on) {
+    showIdle(); // shows where it is now: the pinned spot or next to the mouse
+    if (tell) showHud('ok', 'Bubble is on', `Press ${BUBBLE_HOTKEY} to hide it`);
+  } else {
+    if (!busy) closeBubble();
+    if (tell) showHud('ok', 'Bubble hidden', `Press ${BUBBLE_HOTKEY} to show it again`);
+  }
+}
+
+function toggleSnooze() {
+  clearTimeout(snoozeTimer);
+  if (Date.now() < snoozeUntil) {
+    snoozeUntil = 0;
+    if (pinnedAt()) showIdle();
+    showHud('ok', 'Bubble is back');
+    return;
+  }
+  snoozeUntil = Date.now() + 30 * 60 * 1000;
+  if (!busy) closeBubble();
+  showHud('ok', 'Bubble paused for 30 minutes', `Press ${BUBBLE_HOTKEY} to bring it back now`);
+  snoozeTimer = setTimeout(() => {
+    snoozeUntil = 0;
+    if (pinnedAt() && bubbleAllowed()) showIdle();
+  }, 30 * 60 * 1000);
+}
+
+// Pins the bubble where it is now (before the ring opened), or lets it follow the mouse again.
+function togglePin() {
+  if (pinnedAt()) {
+    saveSettings({ bubblePin: null });
+    showHud('ok', 'Bubble unpinned', 'It shows next to the mouse again');
+  } else {
+    const { x, y } = ring || bubbleWindow.getBounds();
+    saveSettings({ bubblePin: { x, y } });
+    showHud('ok', 'Bubble pinned here', 'Drag it to move it. Right-click it to unpin.');
+  }
+  tray?.setContextMenu(buildTrayMenu());
+}
+
+function copyLastProposal() {
+  if (!lastProposal) return;
+  clipboard.writeText(lastProposal);
+  showBubble('paste', 'Paste proposal', 'Copied again. Click the proposal box, then here');
+}
+
+function restartApp() {
+  log('[action] restart');
+  stopController?.abort();
+  app.relaunch();
+  app.quit();
+}
+
+// Every ring button. Anything else from the window is ignored.
+const RING_ACTIONS = {
+  stop: stopWriting,
+  copy: copyLastProposal,
+  settings: openSettings,
+  pin: togglePin,
+  restart: restartApp,
+  quit: () => app.quit(),
+  hide: () => setBubbleShown(false),
+  snooze: toggleSnooze,
+};
+
+// Dragging the bubble moves it and pins it there.
+let dragFrom = null;
+
+function dragBubble(phase, x, y) {
+  if (!bubbleWindow || bubbleWindow.isDestroyed() || ring) return;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  if (phase === 'start') {
+    const [wx, wy] = bubbleWindow.getPosition();
+    dragFrom = { dx: wx - x, dy: wy - y };
+    clearTimeout(bubbleTimer);
+  } else if (dragFrom) {
+    const nx = Math.round(x + dragFrom.dx);
+    const ny = Math.round(y + dragFrom.dy);
+    bubbleWindow.setPosition(nx, ny);
+    if (phase === 'end') {
+      dragFrom = null;
+      saveSettings({ bubblePin: { x: nx, y: ny } });
+      tray?.setContextMenu(buildTrayMenu());
+      log(`[bubble] pinned at ${nx},${ny}`);
+      scheduleBubbleHide();
+    }
+  }
 }
 
 // ---------- the main action ----------
@@ -240,6 +419,8 @@ function showBubble(state, label, sub = '', { sound = '', at = null } = {}) {
 async function writeProposal({ fromSelection = false, at = null } = {}) {
   if (busy) return;
   busy = true;
+  const stop = new AbortController();
+  stopController = stop;
   log(`[action] write proposal (fromSelection=${fromSelection})`);
   settingsWindow?.webContents.send('status', {
     kind: 'working',
@@ -255,18 +436,29 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
       job = result.text;
       log(`[copy] selection copied=${result.copied}, ${job.length} chars, ${result.info}`);
     }
+    if (stop.signal.aborted) throw new Error('Stopped');
     showBubble('writing', 'Writing proposal...', 'A few seconds');
     // While the window is open, the proposal shows up there as it is written.
     const onProgress = settingsWindow ? (text) => settingsWindow?.webContents.send('progress', text) : undefined;
-    lastProposal = await generateProposal(job, getApiKey(), {
-      prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress, log,
+    // Every AI request gets the Stop signal, so Stop ends it at once.
+    const fetchImpl = (url, options) => fetch(url, { ...options, signal: stop.signal });
+    const proposal = await generateProposal(job, getApiKey(), {
+      prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), onProgress, log, fetchImpl,
     });
+    if (stop.signal.aborted) throw new Error('Stopped');
+    lastProposal = proposal;
     clipboard.writeText(lastProposal);
     remember(job, lastProposal);
     settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Proposal ready. It is copied—paste it into the job form.', lastProposal });
     showBubble('paste', 'Paste proposal', 'Click the proposal box, then here', { sound: 'done' });
     showHud('ok', 'Proposal ready to paste', 'Your proposal is copied. Paste it into the job form.');
   } catch (e) {
+    if (stop.signal.aborted) {
+      log('[action] stopped');
+      settingsWindow?.webContents.send('status', { kind: 'ok', text: 'Stopped. No new proposal was copied.', lastProposal });
+      showBubble('stopped', 'Stopped', 'No new proposal was copied');
+      return;
+    }
     const detail = `${e.message}\nNo new proposal was copied. Check this message before pasting.`;
     settingsWindow?.webContents.send('status', { kind: 'error', text: detail, lastProposal });
     showBubble('error', 'Proposal not ready', e.message);
@@ -275,6 +467,7 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
     if (/API key/.test(e.message)) openSettings();
   } finally {
     busy = false;
+    stopController = null;
   }
 }
 
@@ -287,7 +480,8 @@ async function pasteProposal() {
 }
 
 function onBubbleClicked() {
-  if (bubbleState === 'offer') {
+  if (ring) return;
+  if (bubbleState === 'offer' || bubbleState === 'idle') {
     const [x, y] = bubbleWindow.getPosition();
     writeProposal({ fromSelection: true, at: { x: x - 14, y: y - 14 } });
   } else if (bubbleState === 'paste') {
@@ -301,7 +495,7 @@ function onBubbleClicked() {
 // The user selected a block of text: offer to write a proposal from it.
 // A new selection replaces an old "Paste" bubble; only a proposal being written blocks it.
 function onTextSelected(at, reason) {
-  if (busy || bubbleState === 'writing') return;
+  if (busy || bubbleState === 'writing' || ring || !bubbleAllowed()) return;
   log(`[select] ${reason}`);
   showBubble('offer', 'Write proposal', 'From the selected text', { at });
 }
@@ -437,14 +631,12 @@ function buildTrayMenu() {
       ? { label: `Update now to ${update.version}`, click: installUpdate }
       : { label: 'Check for updates', click: () => checkForUpdates({ manual: true }) },
     {
-      label: 'Show bubble when I select text',
+      label: `Show bubble (${BUBBLE_HOTKEY} hides / shows it)`,
       type: 'checkbox',
       checked: selectionBubbleOn(),
-      click: (item) => {
-        saveSettings({ selectionBubble: item.checked });
-        settingsWindow?.webContents.send('selection-bubble', item.checked);
-      },
+      click: (item) => setBubbleShown(item.checked, { tell: false }),
     },
+    ...(pinnedAt() ? [{ label: 'Unpin bubble (follow the mouse)', click: togglePin }] : []),
     {
       label: 'Start with Windows',
       type: 'checkbox',
@@ -531,6 +723,7 @@ ipcMain.handle('set-hotkey', (_e, text) => {
   const wanted = String(text || '');
   if (!isValidHotkey(wanted)) return { ok: false, hotkey, message: 'Use Ctrl or Alt, plus a letter, number or F-key.' };
   if (wanted === hotkey) return { ok: true, hotkey };
+  if (wanted === BUBBLE_HOTKEY) return { ok: false, hotkey, message: `${wanted} already hides / shows the bubble. Try another one.` };
   if (!setHotkey(wanted)) return { ok: false, hotkey, message: `${wanted} is taken by another app. Try another one.` };
   saveSettings({ hotkey: wanted });
   tray?.setToolTip(`Bidderr - select a job, click the bubble or press ${hotkey}`);
@@ -563,8 +756,19 @@ ipcMain.on('bubble-hover', (_e, inside) => {
   if (bubbleHovered) clearTimeout(bubbleTimer);
   else scheduleBubbleHide();
 });
+ipcMain.on('bubble-drag', (_e, phase, x, y) => {
+  if (['start', 'move', 'end'].includes(phase)) dragBubble(phase, Number(x), Number(y));
+});
+ipcMain.on('ring-open', openRing);
+ipcMain.on('ring-close', closeRing);
+ipcMain.on('ring-action', (_e, action) => {
+  if (!Object.hasOwn(RING_ACTIONS, action)) return;
+  log(`[ring] ${action}`);
+  closeRing();
+  RING_ACTIONS[action]();
+});
 ipcMain.on('bubble-size', (_e, width, height) => {
-  if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
+  if (!bubbleWindow || bubbleWindow.isDestroyed() || ring) return;
   const w = Math.min(Math.max(Math.round(width) || 0, 56), 420);
   const h = Math.min(Math.max(Math.round(height) || 0, 56), 140);
   const [x, y] = bubbleWindow.getPosition();
@@ -576,8 +780,7 @@ ipcMain.on('bubble-size', (_e, width, height) => {
   }
 });
 ipcMain.handle('set-selection-bubble', (_e, on) => {
-  saveSettings({ selectionBubble: Boolean(on) });
-  tray?.setContextMenu(buildTrayMenu());
+  setBubbleShown(Boolean(on), { tell: false });
   return selectionBubbleOn();
 });
 
@@ -596,6 +799,12 @@ if (!app.requestSingleInstanceLock()) {
     if (!(isValidHotkey(saved) && setHotkey(saved))) setHotkey(DEFAULT_HOTKEY);
     tray.setToolTip(`Bidderr - select a job, click the bubble or press ${hotkey || DEFAULT_HOTKEY}`);
     tray.on('click', openSettings);
+    let bubbleHotkeyOk = false;
+    try {
+      bubbleHotkeyOk = globalShortcut.register(BUBBLE_HOTKEY, () => setBubbleShown(!bubbleAllowed()));
+    } catch {
+      // stays false
+    }
     createHud();
     createBubble();
 
@@ -603,7 +812,11 @@ if (!app.requestSingleInstanceLock()) {
       onSelection: onTextSelected, isEnabled: selectionBubbleOn, browsersOnly: browsersOnlyOn, log,
     });
     app.on('will-quit', stopWatch);
-    log(`[start] version ${app.getVersion()}, hotkey registered=${hotkeyOk}, selection bubble=${selectionBubbleOn()}`);
+    log(`[start] version ${app.getVersion()}, hotkey registered=${hotkeyOk}, bubble hotkey=${bubbleHotkeyOk}, selection bubble=${selectionBubbleOn()}`);
+    // A pinned bubble is always on screen, once its page has loaded.
+    bubbleWindow.webContents.once('did-finish-load', () => {
+      if (pinnedAt() && bubbleAllowed()) showIdle();
+    });
 
     // CI check of the packaged app: it started, loaded its Windows helpers and got the hotkey.
     const smoke = process.argv.find((a) => a.startsWith('--smoke-test='));

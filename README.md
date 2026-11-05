@@ -23,6 +23,9 @@ The key is saved on this device only (encrypted), so set it up separately on eac
   pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Wait for the green paste badge,
   then click the proposal box and the bubble. Bidderr copies the ready proposal again just before pasting.
   The selection bubble can be turned off in the window or the tray menu, or set to show only in web browsers.
+- **Right-click the bubble** for the action ring: Stop writing, Copy again, Open Bidderr, Pin here / Unpin,
+  Restart, Quit, Hide, Pause 30 min. Drag the bubble to pin it in one spot (a pinned bubble stays on screen).
+  `Ctrl+Alt+Shift+B` hides or shows the bubble anywhere.
 - The shortcut can be changed under **Shortcut** in the window.
 - **Recent proposals** keeps your last 30 proposals on the PC, each with a Copy button.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.

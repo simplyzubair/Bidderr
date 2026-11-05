@@ -35,6 +35,7 @@ public static RECT Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return r; }
 public static void MoveTo(int x, int y) { SetCursorPos(x, y); }
 public static void LeftDown() { mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); }
 public static void LeftUp() { mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); }
+public static void RightClick() { mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero); mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero); }
 // Clicks inside the window's text, but never on the Bidderr bubble (ax,ay,aw,ah = its rect):
 // a click on an old "Paste" bubble would paste a proposal, like it would for a person.
 public static bool ClickTextArea(IntPtr h, int ax, int ay, int aw, int ah) {
@@ -265,6 +266,30 @@ try {
   $all = Get-Clipboard -Raw
   if (-not ($all.Contains('BUBBLE JOB') -and $all.Contains('Best,') -and $all.Contains($BOLD_D))) { throw "4 - the proposal was not pasted into Notepad: $all" }
   Write-Host 'PASS 4-bubble-select-write-paste'
+
+  # 5. Ctrl+Alt+Shift+B hides and shows the bubble; right-click opens the ring; Pin, then Unpin.
+  Write-Host '=== 5-hide-show-ring-pin'
+  $logLines = @(Get-Content $appLog).Count
+  Press-Keys @(0x11, 0x12, 0x10) 0x42
+  Wait-Log '\[hud\] ok: Bubble hidden' 5 $logLines | Write-Host
+  $logLines = @(Get-Content $appLog).Count
+  Press-Keys @(0x11, 0x12, 0x10) 0x42
+  Wait-Log '\[hud\] ok: Bubble is on' 5 $logLines | Write-Host
+  foreach ($step in 'pin', 'unpin') {
+    $c = Bubble-Center 'idle' $logLines
+    $logLines = @(Get-Content $appLog).Count
+    [E2E.Win]::MoveTo($c[0], $c[1]); Start-Sleep -Milliseconds 150
+    [E2E.Win]::RightClick()
+    $x, $y, $w, $h = ((Wait-Log '\[ring\] open ' 5 $logLines) -split ' ')[-1] -split ',' | ForEach-Object { [int]$_ }
+    Start-Sleep -Milliseconds 400 # the buttons pop in
+    Shot "5-ring-$step"
+    # The Pin button sits at the lower right (135 degrees), 82 of the ring's 236 px from its centre.
+    $k = $w / 236 * 82 * 0.7071
+    Click-At ([int]($x + $w / 2 + $k)) ([int]($y + $h / 2 + $k))
+    $expect = if ($step -eq 'pin') { 'Bubble pinned here' } else { 'Bubble unpinned' }
+    Wait-Log "\[hud\] ok: $expect" 5 $logLines | Write-Host
+  }
+  Write-Host 'PASS 5-hide-show-ring-pin'
 
   # 3. A job page in Chrome: select all, press the hotkey.
   $page = Join-Path $work 'job.html'
