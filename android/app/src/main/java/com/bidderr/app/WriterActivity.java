@@ -30,6 +30,8 @@ import org.json.JSONObject;
 public class WriterActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
 
+    private static WriterActivity current;
+
     private WebView web;
     private String pendingText;
     private boolean pageReady;
@@ -37,6 +39,7 @@ public class WriterActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        current = this;
         float dp = getResources().getDisplayMetrics().density;
 
         // Only a strip at the bottom; taps above it go straight through to the job page.
@@ -97,6 +100,12 @@ public class WriterActivity extends Activity {
         return text == null ? null : text.toString();
     }
 
+    // Called by the bubble's Stop button: closing the page destroys the WebView, so the request stops.
+    static void stopWriting() {
+        WriterActivity a = current;
+        if (a != null) a.finish();
+    }
+
     private void deliver() {
         if (!pageReady || pendingText == null) return;
         web.evaluateJavascript("window.startWriting(" + JSONObject.quote(pendingText) + ")", null);
@@ -105,6 +114,7 @@ public class WriterActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (current == this) current = null;
         if (web != null) web.destroy();
         super.onDestroy();
     }

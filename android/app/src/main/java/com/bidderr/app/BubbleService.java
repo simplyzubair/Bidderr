@@ -4,8 +4,11 @@ import android.accessibilityservice.AccessibilityService;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Typeface;
@@ -13,6 +16,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.HapticFeedbackConstants;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -20,6 +24,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -34,11 +39,15 @@ import java.util.ArrayDeque;
  *   writing - the B pulses while the proposal is written.
  *   ready   - turns into a green "Paste" pill. Tap the proposal box, then the pill: pasted.
  * The Quick Settings tile (BubbleTileService) can pause it: hidden everywhere until turned back on.
+ * Long-press the bubble: a ring of round buttons opens around it (stop, copy again, open, hide, ...).
  */
 public class BubbleService extends AccessibilityService {
     private static final int MAX_NODES = 4000;
     private static final int MAX_CHARS = 15000;
     private static final long READY_TIMEOUT_MS = 3 * 60 * 1000;
+    private static final long LONG_PRESS_MS = 600;
+    private static final long RING_TIMEOUT_MS = 6000;
+    private static final long SNOOZE_MS = 30 * 60 * 1000;
 
     private static BubbleService instance;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -53,7 +62,10 @@ public class BubbleService extends AccessibilityService {
     private String proposal = "";
     private boolean inJobApp;
     private float dp;
+    private FrameLayout ring;
     private final Runnable backToIdle = () -> setState("idle", "");
+    private final Runnable closeRing = this::closeRing;
+    private final Runnable snoozeOver = this::updateVisibility;
 
     // ---------- called by WriterActivity ----------
 
@@ -62,11 +74,15 @@ public class BubbleService extends AccessibilityService {
     }
 
     static boolean isPaused(Context context) {
-        return context.getSharedPreferences("bubble", MODE_PRIVATE).getBoolean("paused", false);
+        SharedPreferences prefs = context.getSharedPreferences("bubble", MODE_PRIVATE);
+        // "pausedUntil" is the 30 minute snooze; once the time has passed it counts for nothing.
+        return prefs.getBoolean("paused", false) || System.currentTimeMillis() < prefs.getLong("pausedUntil", 0);
     }
 
     static void setPaused(Context context, boolean paused) {
-        context.getSharedPreferences("bubble", MODE_PRIVATE).edit().putBoolean("paused", paused).apply();
+        SharedPreferences.Editor edit = context.getSharedPreferences("bubble", MODE_PRIVATE).edit().putBoolean("paused", paused);
+        if (!paused) edit.remove("pausedUntil");
+        edit.apply();
         MAIN.post(() -> {
             if (instance != null) instance.updateVisibility();
         });
@@ -119,14 +135,19 @@ public class BubbleService extends AccessibilityService {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = getResources().getDisplayMetrics().widthPixels - (int) (64 * dp);
-        params.y = getResources().getDisplayMetrics().heightPixels / 2;
+        resetPosition();
 
         // Drag to move it, tap to act.
         bubble.setOnTouchListener(new View.OnTouchListener() {
             private int startX, startY;
             private float touchX, touchY;
             private boolean moved;
+            private boolean longPressed;
+            private final Runnable longPress = () -> {
+                longPressed = true;
+                bubble.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                openRing();
+            };
 
             @Override
             public boolean onTouch(View v, MotionEvent e) {
@@ -137,19 +158,28 @@ public class BubbleService extends AccessibilityService {
                         touchX = e.getRawX();
                         touchY = e.getRawY();
                         moved = false;
+                        longPressed = false;
+                        MAIN.postDelayed(longPress, LONG_PRESS_MS);
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         int dx = (int) (e.getRawX() - touchX);
                         int dy = (int) (e.getRawY() - touchY);
-                        if (Math.abs(dx) > 12 * dp || Math.abs(dy) > 12 * dp) moved = true;
-                        if (moved) {
+                        if (!longPressed && (Math.abs(dx) > 12 * dp || Math.abs(dy) > 12 * dp)) {
+                            moved = true;
+                            MAIN.removeCallbacks(longPress);
+                        }
+                        if (moved && !longPressed) {
                             params.x = startX + dx;
                             params.y = startY + dy;
                             windowManager.updateViewLayout(bubble, params);
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
-                        if (!moved) onBubbleTapped();
+                        MAIN.removeCallbacks(longPress);
+                        if (!moved && !longPressed) onBubbleTapped();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        MAIN.removeCallbacks(longPress);
                         return true;
                 }
                 return false;
@@ -157,6 +187,137 @@ public class BubbleService extends AccessibilityService {
         });
 
         windowManager.addView(bubble, params);
+    }
+
+    // Default spot: right edge, middle of the screen.
+    private void resetPosition() {
+        params.x = getResources().getDisplayMetrics().widthPixels - (int) (64 * dp);
+        params.y = getResources().getDisplayMetrics().heightPixels / 2;
+        if (bubble.isAttachedToWindow()) windowManager.updateViewLayout(bubble, params);
+    }
+
+    // ---------- action ring (long-press) ----------
+
+    private void openRing() {
+        if (ring != null || bubble == null) return;
+        int size = (int) (220 * dp);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        int cx = params.x + bubble.getWidth() / 2;
+        int cy = params.y + bubble.getHeight() / 2;
+        int x = Math.max(0, Math.min(screenW - size, cx - size / 2));
+        int y = Math.max(0, Math.min(screenH - size, cy - size / 2));
+
+        ring = new FrameLayout(this);
+        // A tap on empty space inside the ring, or outside it, closes it.
+        ring.setOnTouchListener((v, e) -> {
+            if (e.getAction() == MotionEvent.ACTION_OUTSIDE || e.getAction() == MotionEvent.ACTION_DOWN) closeRing();
+            return true;
+        });
+
+        boolean writing = "writing".equals(state);
+        boolean hasProposal = !proposal.isEmpty();
+        int[] icons = {R.drawable.ic_ring_stop, R.drawable.ic_ring_copy, R.drawable.ic_ring_open,
+                R.drawable.ic_ring_hide, R.drawable.ic_ring_snooze, R.drawable.ic_ring_reset};
+        String[] names = {"Stop writing", "Copy proposal again", "Open Bidderr", "Hide bubble",
+                "Pause for 30 minutes", "Reset position"};
+        boolean[] enabled = {writing, hasProposal, true, true, true, true};
+        Runnable[] actions = {this::ringStop, this::ringCopy, this::ringOpen, this::ringHide, this::ringSnooze,
+                this::ringReset};
+        double radius = 80 * dp;
+        for (int i = 0; i < 6; i++) {
+            double angle = Math.toRadians(-90 + i * 60); // clockwise from the top
+            int bx = (int) (size / 2 + radius * Math.cos(angle));
+            int by = (int) (size / 2 + radius * Math.sin(angle));
+            addRingButton(bx, by, 44, icons[i], Color.parseColor("#F3F4F6"), false, names[i], enabled[i], actions[i]);
+        }
+        addRingButton(size / 2, size / 2, 40, R.drawable.ic_ring_close, Color.parseColor("#FB7185"), true,
+                "Close menu", true, () -> { });
+
+        WindowManager.LayoutParams rp = new WindowManager.LayoutParams(size, size,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                PixelFormat.TRANSLUCENT);
+        rp.gravity = Gravity.TOP | Gravity.START;
+        rp.x = x;
+        rp.y = y;
+        windowManager.addView(ring, rp);
+        MAIN.postDelayed(closeRing, RING_TIMEOUT_MS);
+    }
+
+    // One round button centred on (cx, cy) inside the ring. Runs the action, then closes the ring.
+    private void addRingButton(int cx, int cy, int sizeDp, int iconRes, int color, boolean whiteIcon, String name,
+                               boolean enabled, Runnable action) {
+        int px = (int) (sizeDp * dp);
+        ImageView b = new ImageView(this);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(color);
+        b.setBackground(bg);
+        b.setElevation(4 * dp);
+        b.setImageResource(iconRes);
+        int pad = (int) ((sizeDp - 24) / 2f * dp);
+        b.setPadding(pad, pad, pad, pad);
+        if (whiteIcon) b.setColorFilter(Color.WHITE);
+        b.setContentDescription(name);
+        b.setAlpha(enabled ? 1f : 0.35f);
+        b.setClickable(enabled);
+        if (enabled) {
+            b.setOnClickListener(v -> {
+                closeRing();
+                action.run();
+            });
+        }
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(px, px);
+        lp.leftMargin = cx - px / 2;
+        lp.topMargin = cy - px / 2;
+        ring.addView(b, lp);
+    }
+
+    private void closeRing() {
+        MAIN.removeCallbacks(closeRing);
+        if (ring == null) return;
+        FrameLayout old = ring;
+        ring = null;
+        if (old.isAttachedToWindow()) windowManager.removeView(old);
+    }
+
+    private void ringStop() {
+        if (!"writing".equals(state)) return;
+        WriterActivity.stopWriting();
+        setState("idle", "");
+        toast("Stopped");
+    }
+
+    private void ringCopy() {
+        if (proposal.isEmpty()) return;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Bidderr proposal", proposal));
+        setState("ready", proposal);
+        toast("Copied. Tap the proposal box, then Paste.");
+    }
+
+    private void ringOpen() {
+        startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    private void ringHide() {
+        setPaused(this, true);
+        toast("Bubble hidden. Turn it on again from the Bidderr tile or app.");
+    }
+
+    private void ringSnooze() {
+        long until = System.currentTimeMillis() + SNOOZE_MS;
+        getSharedPreferences("bubble", MODE_PRIVATE).edit().putLong("pausedUntil", until).apply();
+        MAIN.removeCallbacks(snoozeOver);
+        MAIN.postDelayed(snoozeOver, SNOOZE_MS);
+        updateVisibility();
+        toast("Bubble hidden for 30 minutes");
+    }
+
+    private void ringReset() {
+        resetPosition();
     }
 
     // idle | writing | ready
@@ -204,6 +365,7 @@ public class BubbleService extends AccessibilityService {
         if (bubble == null) return;
         boolean show = !isPaused(this) && (!"idle".equals(state) || inJobApp);
         bubble.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) closeRing();
     }
 
     @Override
@@ -309,6 +471,8 @@ public class BubbleService extends AccessibilityService {
     public void onDestroy() {
         instance = null;
         MAIN.removeCallbacks(backToIdle);
+        MAIN.removeCallbacks(snoozeOver);
+        closeRing();
         if (pulse != null) pulse.cancel();
         if (bubble != null && windowManager != null) windowManager.removeView(bubble);
         bubble = null;
