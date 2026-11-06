@@ -307,7 +307,19 @@ try {
     if (-not $chromeWin) { Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
   }
   if (-not $chromeWin) { throw 'Chrome did not create a desktop window' }
-  Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB' } 'CHROME JOB' 'true'
+  # A slow-starting Chrome may not have the page ready yet: try the selection up to 3 times.
+  Run-Case '3-chrome-selection' {
+    for ($try = 1; ; $try++) {
+      try {
+        Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB'
+        break
+      } catch {
+        if ($try -ge 3) { throw }
+        Write-Host "Chrome selection not ready (try $try), waiting"
+        Start-Sleep 3
+      }
+    }
+  } 'CHROME JOB' 'true'
 
   # 6. The real packaged exe (what the installer puts on a PC), with fresh settings: the bubble
   #    shows on a selection, Hide (Ctrl+Alt+Shift+B) hides it, and after a restart it is back.
