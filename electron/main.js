@@ -21,7 +21,8 @@ const TRAY_ICON = path.join(__dirname, '../public/tray.png');
 // Test hooks for developer runs only (npm start / the end-to-end test), never in the installed app.
 const DEV = !app.isPackaged;
 const API_BASE = (DEV && process.env.BIDDERR_API_BASE) || undefined;
-const LOG_FILE = DEV ? process.env.BIDDERR_LOG : '';
+// Also for the packaged exe: the end-to-end test of the real installer build reads it.
+const LOG_FILE = process.env.BIDDERR_LOG || '';
 
 let tray = null;
 let settingsWindow = null;
@@ -33,7 +34,7 @@ let lastProposal = '';
 let stopController = null; // aborts the proposal being written (the ring's Stop button)
 
 function log(message) {
-  if (!DEV) return;
+  if (!DEV && !LOG_FILE) return;
   const line = `${new Date().toISOString()} ${message}`;
   console.log(line);
   if (LOG_FILE) fs.appendFileSync(LOG_FILE, `${line}\n`);
@@ -213,7 +214,11 @@ function pinnedAt() {
 // "Pause 30 min" in the ring: no bubble until then (only in memory, a restart ends it).
 let snoozeUntil = 0;
 let snoozeTimer = null;
-const bubbleAllowed = () => selectionBubbleOn() && Date.now() >= snoozeUntil;
+// "Hide" in the ring or Ctrl+Alt+Shift+B: hidden until that key is pressed again or Bidderr
+// restarts. Only the switch in the Bidderr window / tray menu turns it off for good, so a hidden
+// bubble can never be "lost" forever.
+let hiddenForNow = false;
+const bubbleAllowed = () => selectionBubbleOn() && !hiddenForNow && Date.now() >= snoozeUntil;
 
 function scheduleBubbleHide() {
   clearTimeout(bubbleTimer);
@@ -231,6 +236,7 @@ function hideBubble() {
 function closeBubble() {
   clearTimeout(bubbleTimer);
   bubbleState = '';
+  bubbleHovered = false; // a hidden window gets no "mouse left" event
   if (ring) closeRing();
   if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
 }
@@ -295,7 +301,7 @@ function openRing() {
   });
   bubbleWindow.webContents.send('ring', { open: true, ...ringState() });
   // Screen pixels of the ring, for the end-to-end test to click on.
-  const r = DEV ? screen.dipToScreenRect(bubbleWindow, bubbleWindow.getBounds()) : {};
+  const r = LOG_FILE ? screen.dipToScreenRect(bubbleWindow, bubbleWindow.getBounds()) : {};
   log(`[ring] open ${r.x},${r.y},${r.width},${r.height}`);
 }
 
@@ -317,9 +323,10 @@ function stopWriting() {
   stopController.abort();
 }
 
-// Hide / show the bubble (ring, Ctrl+Alt+Shift+B, tray menu, Bidderr window).
+// Turns the bubble on or off for good (tray menu, Bidderr window), or shows it again after a hide.
 function setBubbleShown(on, { tell = true } = {}) {
   saveSettings({ selectionBubble: on });
+  hiddenForNow = false;
   snoozeUntil = 0;
   clearTimeout(snoozeTimer);
   settingsWindow?.webContents.send('selection-bubble', on);
@@ -332,6 +339,17 @@ function setBubbleShown(on, { tell = true } = {}) {
     if (tell) showHud('ok', 'Bubble hidden', `Press ${BUBBLE_HOTKEY} to show it again`);
   }
 }
+
+// Ring "Hide" and Ctrl+Alt+Shift+B: hides it until the key is pressed again or Bidderr restarts.
+function hideForNow() {
+  hiddenForNow = true;
+  snoozeUntil = 0;
+  clearTimeout(snoozeTimer);
+  tray?.setContextMenu(buildTrayMenu());
+  if (!busy) closeBubble();
+  showHud('ok', 'Bubble hidden', `Press ${BUBBLE_HOTKEY} (or restart Bidderr) to show it again`);
+}
+const toggleBubble = () => (bubbleAllowed() ? hideForNow() : setBubbleShown(true));
 
 function toggleSnooze() {
   clearTimeout(snoozeTimer);
@@ -384,7 +402,7 @@ const RING_ACTIONS = {
   pin: togglePin,
   restart: restartApp,
   quit: () => app.quit(),
-  hide: () => setBubbleShown(false),
+  hide: hideForNow,
   snooze: toggleSnooze,
 };
 
@@ -636,7 +654,7 @@ function buildTrayMenu() {
     {
       label: `Show bubble (${BUBBLE_HOTKEY} hides / shows it)`,
       type: 'checkbox',
-      checked: selectionBubbleOn(),
+      checked: selectionBubbleOn() && !hiddenForNow,
       click: (item) => setBubbleShown(item.checked, { tell: false }),
     },
     ...(pinnedAt() ? [{ label: 'Unpin bubble (follow the mouse)', click: togglePin }] : []),
@@ -776,7 +794,7 @@ ipcMain.on('bubble-size', (_e, width, height) => {
   const h = Math.min(Math.max(Math.round(height) || 0, 56), 140);
   const [x, y] = bubbleWindow.getPosition();
   bubbleWindow.setBounds({ x, y, width: w, height: h });
-  if (DEV) {
+  if (LOG_FILE) {
     // Screen pixels of the pill, for the end-to-end test to click on.
     const r = screen.dipToScreenRect(bubbleWindow, bubbleWindow.getBounds());
     log(`[bubble] bounds ${bubbleState} ${r.x},${r.y},${r.width},${r.height}`);
@@ -804,9 +822,14 @@ if (!app.requestSingleInstanceLock()) {
     tray.on('click', openSettings);
     let bubbleHotkeyOk = false;
     try {
-      bubbleHotkeyOk = globalShortcut.register(BUBBLE_HOTKEY, () => setBubbleShown(!bubbleAllowed()));
+      bubbleHotkeyOk = globalShortcut.register(BUBBLE_HOTKEY, toggleBubble);
     } catch {
       // stays false
+    }
+    // Version 2.0.46 saved "Hide" for good, so a hidden bubble never came back. Turn it on once.
+    if (!loadSettings().hideFixed) {
+      if (loadSettings().selectionBubble === false) saveSettings({ selectionBubble: true });
+      saveSettings({ hideFixed: true });
     }
     createHud();
     createBubble();

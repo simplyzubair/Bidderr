@@ -309,6 +309,62 @@ try {
   if (-not $chromeWin) { throw 'Chrome did not create a desktop window' }
   Run-Case '3-chrome-selection' { Focus-Process $chromeWin; Start-Sleep 1; Press-Keys @(0x11) 0x41; Assert-Selection 'CHROME JOB' } 'CHROME JOB' 'true'
 
+  # 6. The real packaged exe (what the installer puts on a PC), with fresh settings: the bubble
+  #    shows on a selection, Hide (Ctrl+Alt+Shift+B) hides it, and after a restart it is back.
+  $exe = Join-Path $root 'release\win-unpacked\Bidderr.exe'
+  if (Test-Path $exe) {
+    Write-Host '=== 6-packaged-exe'
+    Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep 1
+    $appLog = Join-Path $work 'packaged.log'
+    New-Item -ItemType File $appLog -Force | Out-Null
+    $env:BIDDERR_LOG = $appLog
+    $ud = Join-Path $work 'packaged-data'
+    $startExe = {
+      $script:procs += Start-Process $exe -ArgumentList "--user-data-dir=$ud" -PassThru
+      Wait-Log '\[start\] version' 40 @(Get-Content $appLog).Count | Write-Host
+      Start-Sleep 2
+    }
+    $selectInNotepad = {
+      Focus-Process $np2
+      $r = [E2E.Win]::Rect($np2.MainWindowHandle)
+      $n = @(Get-Content $appLog).Count
+      Drag ($r.Left + 30) ($r.Top + 110) ($r.Left + 420) ($r.Top + 175)
+      Wait-Log '\[select\] drag' 5 $n | Write-Host
+      Bubble-Center 'offer' $n | Out-Null
+      return $n
+    }
+    & $startExe
+    $n = & $selectInNotepad
+    Shot '6a-packaged-bubble'
+    $c = Bubble-Center 'offer' $n
+    $n = @(Get-Content $appLog).Count
+    [E2E.Win]::MoveTo($c[0], $c[1]); Start-Sleep -Milliseconds 150
+    [E2E.Win]::RightClick()
+    $x, $y, $w, $h = ((Wait-Log '\[ring\] open ' 5 $n) -split ' ')[-1] -split ',' | ForEach-Object { [int]$_ }
+    Start-Sleep -Milliseconds 400
+    Shot '6b-packaged-ring'
+    # The Hide button sits at the left (270 degrees), 82 of the ring's 236 px from its centre.
+    Click-At ([int]($x + $w / 2 - $w / 236 * 82)) ([int]($y + $h / 2))
+    Wait-Log '\[hud\] ok: Bubble hidden' 5 $n | Write-Host
+    # Hidden: a new selection shows nothing.
+    $n = @(Get-Content $appLog).Count
+    Focus-Process $np2
+    $r = [E2E.Win]::Rect($np2.MainWindowHandle)
+    Drag ($r.Left + 30) ($r.Top + 110) ($r.Left + 420) ($r.Top + 175)
+    Start-Sleep 2
+    if (@(Get-Content $appLog | Select-Object -Skip $n | Select-String -Pattern '\[bubble\] offer').Count -gt 0) { throw '6 - the bubble showed while hidden' }
+    # Restart: the bubble is back.
+    Get-Process Bidderr -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
+    Start-Sleep 2
+    & $startExe
+    & $selectInNotepad | Out-Null
+    Shot '6c-packaged-after-restart'
+    Write-Host 'PASS 6-packaged-exe'
+  } else {
+    Write-Host "SKIP 6-packaged-exe (no $exe; build it with: npx electron-builder --win --dir)"
+  }
+
   Write-Host 'ALL END-TO-END TESTS PASSED'
 } catch {
   Shot 'failure'

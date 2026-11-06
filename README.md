@@ -25,7 +25,8 @@ The key is saved on this device only (encrypted), so set it up separately on eac
   The selection bubble can be turned off in the window or the tray menu, or set to show only in web browsers.
 - **Right-click the bubble** for the action ring: Stop writing, Copy again, Open Bidderr, Pin here / Unpin,
   Restart, Quit, Hide, Pause 30 min. Drag the bubble to pin it in one spot (a pinned bubble stays on screen).
-  `Ctrl+Alt+Shift+B` hides or shows the bubble anywhere.
+  `Ctrl+Alt+Shift+B` (or Hide in the ring) hides the bubble until you press it again or restart Bidderr;
+  the switch in the Bidderr window turns it off for good.
 - The shortcut can be changed under **Shortcut** in the window.
 - **Recent proposals** keeps your last 30 proposals on the PC, each with a Copy button.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.

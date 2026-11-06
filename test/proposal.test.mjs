@@ -42,7 +42,7 @@ test('generateProposal sends the prompt and job to Gemini', async () => {
   assert.equal(f.calls[0].key, 'KEY');
   assert.match(f.calls[0].body.systemInstruction.parts[0].text, /Offer Summary/);
   assert.match(f.calls[0].body.contents[0].parts[0].text, /blurry logo/);
-  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'low');
+  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'minimal');
 });
 
 test('generateProposal asks 3.5-flash-lite to think at "minimal"', async () => {
@@ -57,10 +57,16 @@ test('generateProposal disables thinking on 2.5 models for immediate generation'
   assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingBudget, 0);
 });
 
-test('generateProposal asks Gemini 3 Flash to think at "low" for speed', async () => {
-  const f = fakeFetch([answer('Hello,\n\nBest,\nKhan')]);
-  await generateProposal(JOB, 'KEY', { fetchImpl: f, models: ['gemini-3.8-flash'] });
-  assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, 'low');
+test('generateProposal asks 3.6-flash for "minimal" thinking and 3.8-flash (no minimal) for "low"', async () => {
+  for (const [model, level] of [['gemini-3.6-flash', 'minimal'], ['gemini-3.8-flash', 'low']]) {
+    const f = fakeFetch([answer('Hello,\n\nBest,\nKhan')]);
+    await generateProposal(JOB, 'KEY', { fetchImpl: f, models: [model] });
+    assert.equal(f.calls[0].body.generationConfig.thinkingConfig?.thinkingLevel, level, model);
+  }
+});
+
+test('the two fast models are tried first', () => {
+  assert.deepEqual(MODELS.slice(0, 2), ['gemini-3.6-flash', 'gemini-3.5-flash-lite']);
 });
 
 test('generateProposal retries without thinkingConfig if model rejects thinking', async () => {
@@ -328,5 +334,5 @@ test('the newest models think as little as they allow; 2.5-flash-lite gets no th
   const f = fakeFetch(MODELS.map(() => ({ status: 503, body: {} })));
   await assert.rejects(generateProposal(JOB, 'KEY', { fetchImpl: f }));
   const levels = f.calls.map((c) => c.body.generationConfig.thinkingConfig?.thinkingLevel ?? 'none');
-  assert.deepEqual(levels, ['low', 'low', 'minimal', 'none']);
+  assert.deepEqual(levels, ['minimal', 'minimal', 'low', 'none']);
 });

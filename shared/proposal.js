@@ -9,13 +9,14 @@
   else root.Bidderr = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   // Tried in order. If one is missing, too slow or out of free quota, the next one is used.
-  // Checked against aistudio.google.com/docs/models, /thinking and /deprecations on 2026-11-05.
-  // 3.8-flash: Google's smartest Flash model; thinks at "low" (its lowest) to stay fast.
-  // 3.6-flash: previous Flash, stable, its own free quota (flash-latest was dropped: it is the
-  //   same model as 3.8-flash, so it failed whenever 3.8 did).
-  // 3.5-flash-lite: the fastest 3.x model, thinks at "minimal".
-  // 2.5-flash-lite: no thinking at all, last resort (2.5-flash shuts down on 2026-12-01).
-  const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
+  // Checked against aistudio.google.com/docs/models and /thinking on 2026-11-06.
+  // 3.6-flash: strong writer, can think at "minimal" (almost no thinking), so the first words
+  //   come in a second or two. Best mix of fast and good for a ~250-word proposal.
+  // 3.5-flash-lite: the fastest 3.x model, also "minimal".
+  // 3.8-flash: smartest Flash, but built for long agent work: its lowest level is "low", so it
+  //   thinks for several seconds first. Only used when the two faster ones are busy.
+  // 2.5-flash-lite: no thinking at all, last resort.
+  const MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash-lite'];
 
   // A model that just failed is skipped for a while, so it doesn't cost an extra round trip on
   // every proposal: a missing model (404) for a day, a busy or out-of-quota one for a minute.
@@ -63,8 +64,8 @@
   // How much each model may "think" before writing. Less thinking = faster answer.
   function thinkingConfigFor(model) {
     if (noThinking.has(model)) return null;
-    if (model.includes('3.5-flash-lite')) return { thinkingLevel: 'minimal' };
-    if (model.startsWith('gemini-3')) return { thinkingLevel: 'low' };
+    if (model.startsWith('gemini-3.8')) return { thinkingLevel: 'low' }; // has no "minimal"
+    if (model.startsWith('gemini-3')) return { thinkingLevel: 'minimal' };
     if (model.startsWith('gemini-2.5-flash-lite')) return null; // thinks only when asked
     if (model.startsWith('gemini-2.5')) return { thinkingBudget: 0 };
     return null;
@@ -331,8 +332,8 @@ OUTPUT RULES:
 
   // A model that shows no words for FIRST_WORD_MS, or stops for STALL_MS, is dropped for the
   // next one (when there is a next one), instead of keeping the user waiting up to a minute.
-  const FIRST_WORD_MS = 8000;
-  const STALL_MS = 15000;
+  const FIRST_WORD_MS = 6000;
+  const STALL_MS = 10000;
 
   // Runs call(onText, signal) and fails with status 408 if the answer is too slow.
   // limit: false = no time limit (the last option left, so a slow answer beats none).

@@ -105,6 +105,9 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      # The packaged exe too (step 6 of the test), not only the developer run.
+      - shell: bash
+        run: npx electron-builder --win --dir --publish never
       - shell: pwsh
         run: ./test/e2e-windows.ps1
       - if: always()
