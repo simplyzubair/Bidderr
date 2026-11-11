@@ -112,7 +112,7 @@ function showStatus({ kind, text, lastProposal }) {
     spinner.className = 'spinner';
     $('write').replaceChildren(spinner, document.createTextNode('Writing proposal…'));
   } else {
-    $('write').textContent = 'Write from copied job';
+    $('write').textContent = 'Write proposal';
   }
   if (lastProposal) $('last').value = lastProposal;
 }
@@ -122,7 +122,8 @@ window.bidderr.onProgress((text) => {
   $('last').value = text;
 });
 
-$('write').addEventListener('click', () => window.bidderr.writeNow());
+// The pasted job in the box, or (box empty) the job in the clipboard.
+$('write').addEventListener('click', () => window.bidderr.writeNow($('job').value));
 $('copy-last').addEventListener('click', async () => {
   if (!$('last').value) return;
   await window.bidderr.copyText($('last').value);

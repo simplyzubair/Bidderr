@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('bidderr', {
   getState: () => ipcRenderer.invoke('get-state'),
   saveKey: (key) => ipcRenderer.invoke('save-key', key),
-  writeNow: () => ipcRenderer.invoke('write-now'),
+  writeNow: (job) => ipcRenderer.invoke('write-now', String(job || '')),
   copyText: (text) => ipcRenderer.invoke('copy-text', text),
   getProfiles: () => ipcRenderer.invoke('get-profiles'),
   setProfile: (id) => ipcRenderer.invoke('set-profile', String(id)),

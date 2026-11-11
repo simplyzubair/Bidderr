@@ -146,7 +146,7 @@ async function write(jobText) {
   setNote($('status'), 'Writing… wait for “Proposal ready” before pasting.', 'working');
   try {
     const job = String(jobText || '').trim();
-    if (!job && (store.key || store.backupKey)) throw new Error('No job post found in the clipboard. Copy the job post first, then try again.');
+    if (!job && (store.key || store.backupKey)) throw new Error('No job post yet. Paste it in the box (or copy it), then try again.');
     $('job').value = job;
     const proposal = await generateProposal(job, store.key, {
       prompt: store.prompt(store.profile),
@@ -172,16 +172,11 @@ async function write(jobText) {
   }
 }
 
-// Called by MainActivity when text comes from the bubble, "Write proposal" or Share.
-// From the bubble, go straight back to the job page once the proposal is copied.
-window.onJobText = async (text, fromBubble) => {
-  $('job-card').open = true; // show what was read, so the user can check it
-  const ok = await write(text);
-  if (ok && fromBubble && window.Android) setTimeout(() => window.Android.backToJob(), 700);
-};
+// Called by MainActivity when text comes from "Write proposal" or Share.
+window.onJobText = (text) => write(text);
 
-$('paste-write').addEventListener('click', async () => write(await readClipboard()));
-$('write').addEventListener('click', () => write($('job').value));
+// The job pasted in the box, or (box empty) the job in the clipboard.
+$('paste-write').addEventListener('click', async () => write($('job').value.trim() || await readClipboard()));
 $('again').addEventListener('click', () => write($('job').value));
 $('copy').addEventListener('click', () => {
   if (!$('result').value) return;
@@ -203,33 +198,8 @@ $('reset-prompt').addEventListener('click', () => {
   toast('Default prompt restored');
 });
 
-// ---------- floating bubble ----------
-
-function refreshBubbleCard() {
-  const supported = Boolean(window.Android?.isBubbleOn);
-  if (!supported) {
-    $('bubble-card')?.classList.add('hidden');
-    return;
-  }
-  const on = window.Android.isBubbleOn();
-  if ($('bubble-pill')) {
-    setNote($('bubble-pill'), on ? 'Active' : 'Off', on ? 'ok' : '');
-  }
-  // Remember that the user wanted the bubble, so we can warn when Android turns it off.
-  if (on) localStorage.setItem('bidderr.bubbleWanted', '1');
-  $('bubble-off-card').classList.toggle('hidden', on || !localStorage.getItem('bidderr.bubbleWanted'));
-}
-$('bubble-settings').addEventListener('click', () => window.Android?.openBubbleSettings());
-$('bubble-on-again').addEventListener('click', () => window.Android?.openBubbleSettings());
-$('bubble-off-ok').addEventListener('click', () => {
-  localStorage.removeItem('bidderr.bubbleWanted');
-  refreshBubbleCard();
-});
-// Android 13+ blocks the bubble for apps not from the Play Store until this is allowed.
-$('app-info').addEventListener('click', () => window.Android?.openAppInfo());
-// Coming back to the app: refresh the bubble card and look for a new version.
+// Coming back to the app: look for a new version.
 window.onAppResumed = () => {
-  refreshBubbleCard();
   if (!updateUrl) checkForUpdate();
 };
 
@@ -311,5 +281,4 @@ showHistory();
 showBackup();
 $('version').textContent = installedVersion ? `Bidderr ${installedVersion} · updates from bidderr.skillsgeek.com` : 'Bidderr';
 showKey();
-refreshBubbleCard();
 checkForUpdate();

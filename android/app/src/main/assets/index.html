@@ -17,15 +17,6 @@
     <span id="ready-pill" class="pill">Loading</span>
   </header>
 
-  <!-- Shown when the bubble was on before and Android turned it off (after an update, or to save battery). -->
-  <section id="bubble-off-card" class="card update-card hidden">
-    <div class="update-row">
-      <p class="note error">The floating bubble is off. Android sometimes turns it off after an update or to save battery.</p>
-      <button id="bubble-on-again" class="btn primary">Turn it on again</button>
-      <button id="bubble-off-ok" class="btn ghost">I turned it off</button>
-    </div>
-  </section>
-
   <section id="update-card" class="card update-card">
     <div class="card-head">
       <div>
@@ -66,8 +57,8 @@
 
   <section class="card action-card">
     <p class="eyebrow">QUICK ACTION</p>
-    <h2>Write from a copied job post</h2>
-    <p class="muted">Copy the job post first. Bidderr copies your proposal when it is ready.</p>
+    <h2>Write a proposal</h2>
+    <p class="muted">Paste the job post in the box (or just copy it). Bidderr copies your proposal when it is ready.</p>
     <fieldset class="profiles">
       <legend>Your work</legend>
       <div id="profiles" class="profile-list"></div>
@@ -77,6 +68,7 @@
       <div class="flow-step"><b>2</b><span>Write</span></div>
       <div class="flow-step"><b>3</b><span>Paste when ready</span></div>
     </div>
+    <textarea id="job" placeholder="Paste the job post here. Leave it empty to use the job you copied."></textarea>
     <button id="paste-write" class="btn primary big block">Write proposal</button>
     <p id="status" class="note status-message" role="status" aria-live="polite"></p>
     <p class="helper-note"><strong>From another app:</strong> Select the job text, tap <strong>Write proposal</strong> in the selection menu, then wait for “Proposal ready.”</p>
@@ -92,21 +84,6 @@
     <p class="helper-note">Wait for “Proposal ready” before pasting. If writing fails, no new proposal was copied; check the message before pasting.</p>
   </section>
 
-  <details id="bubble-card" class="card">
-    <summary>Floating Bidderr bubble <span id="bubble-pill" class="pill">Off</span></summary>
-    <p class="muted">Optional: a green <strong>B</strong> floats over job pages. Tap it to write a proposal without selecting anything. When the proposal is ready it turns into a <strong>Paste</strong> button: tap the proposal box, then tap Paste.</p>
-    <ol class="steps">
-      <li><span class="num">1</span><b>Tap Open settings</b><small>Below this list</small></li>
-      <li><span class="num">2</span><b>Turn on "Bidderr bubble"</b><small>Under "Installed apps"</small></li>
-      <li><span class="num">3</span><b>If it is greyed out (Android 13+):</b><small>Tap Open app info below, tap ⋮ (top right), tap Allow restricted settings, then do step 1 and 2 again</small></li>
-      <li><span class="num">4</span><b>Quick on/off:</b><small>Add the "Bidderr bubble" tile to your quick settings (swipe down twice, tap the pencil)</small></li>
-    </ol>
-    <div class="row">
-      <button id="bubble-settings" class="btn">Open settings</button>
-      <button id="app-info" class="btn">Open app info</button>
-    </div>
-  </details>
-
   <details id="history-card" class="card">
     <summary>Recent proposals <span id="history-pill" class="pill">0</span></summary>
     <p class="muted">Your last 30 proposals, saved on this phone only.</p>
@@ -114,10 +91,13 @@
     <div class="row"><button id="clear-history" class="btn">Clear list</button></div>
   </details>
 
-  <details id="job-card" class="card">
-    <summary>Job posting</summary>
-    <textarea id="job" placeholder="The job text shows here. You can also type or paste it yourself."></textarea>
-    <div class="row"><button id="write" class="btn">Write proposal from this text</button></div>
+  <details class="card">
+    <summary>Shortcuts</summary>
+    <p class="muted">Copy a job post in any app, then start Bidderr without opening it:</p>
+    <ol class="plain">
+      <li><b>Quick Settings tile:</b> swipe down twice, tap the pencil, and add the <b>Write proposal</b> tile. Then copy a job, swipe down, tap the tile.</li>
+      <li><b>App icon:</b> long-press the Bidderr icon and tap <b>Write proposal</b>. Drag it to your home screen for a one-tap button.</li>
+    </ol>
   </details>
 
   <details class="card">
@@ -136,7 +116,7 @@
       <li><b>Use selected text:</b> In Chrome or a job app, select the job text and tap <b>Write proposal</b> in the selection menu.</li>
       <li><b>Use copied text:</b> Copy the job post, open Bidderr, then tap <b>Write proposal</b> above.</li>
       <li><b>Paste when ready:</b> Wait for <b>Proposal ready</b>, then return to the job app and paste.</li>
-      <li><b>Optional bubble:</b> Turn on the floating Bidderr bubble if you prefer an on-screen button.</li>
+      <li><b>Shortcut:</b> Copy the job, then tap the <b>Write proposal</b> tile in Quick Settings (see Shortcuts).</li>
     </ol>
   </details>
 

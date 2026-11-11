@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PPH Bidderr</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="app-header">
+    <img class="logo" src="icon.png" alt="">
+    <div>
+      <h1>PPH Bidderr</h1>
+      <p>Open a PeoplePerHour job's proposal page. The proposal writes itself.</p>
+    </div>
+  </header>
+
+  <section class="card action-card">
+    <button id="write" class="btn primary big block">Write proposal on this page</button>
+    <p id="status" class="note"></p>
+    <label class="switch-row">
+      <input id="auto" type="checkbox" checked>
+      <span>Write by itself when I open a proposal box on PPH</span>
+    </label>
+    <fieldset class="profiles">
+      <legend>Your work</legend>
+      <div id="profiles" class="profile-list"></div>
+    </fieldset>
+  </section>
+
+  <details id="key-card" class="card">
+    <summary>Google API key <span id="key-pill" class="pill">No key</span></summary>
+    <p class="muted">Free key from <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>. Saved in this browser only.</p>
+    <input id="key" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
+    <div class="row"><button id="save-key" class="btn primary">Save key</button></div>
+    <p id="key-note" class="note"></p>
+  </details>
+
+  <details id="backup-card" class="card">
+    <summary>Backup AI (optional) <span id="backup-pill" class="pill">Off</span></summary>
+    <p class="muted">Used when Google is busy. Free Groq key: <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>, or an OpenRouter key.</p>
+    <input id="backup-key" type="password" placeholder="gsk_... or sk-or-..." autocomplete="off" spellcheck="false">
+    <div class="row">
+      <button id="save-backup" class="btn primary">Save backup key</button>
+      <button id="remove-backup" class="btn">Remove</button>
+    </div>
+    <p id="backup-note" class="note"></p>
+  </details>
+
+  <p class="helper-note">PPH Bidderr never presses Send. Always read the proposal first.</p>
+
+  <script src="proposal.js"></script>
+  <script src="ui.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

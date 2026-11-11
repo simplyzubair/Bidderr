@@ -267,13 +267,13 @@ try {
   if (-not ($all.Contains('BUBBLE JOB') -and $all.Contains('Best,') -and $all.Contains($BOLD_D))) { throw "4 - the proposal was not pasted into Notepad: $all" }
   Write-Host 'PASS 4-bubble-select-write-paste'
 
-  # 5. Ctrl+Alt+Shift+B hides and shows the bubble; right-click opens the ring; Pin, then Unpin.
+  # 5. Ctrl+Shift+2 hides and shows the bubble; right-click opens the ring; Pin, then Unpin.
   Write-Host '=== 5-hide-show-ring-pin'
   $logLines = @(Get-Content $appLog).Count
-  Press-Keys @(0x11, 0x12, 0x10) 0x42
+  Press-Keys @(0x11, 0x10) 0x32
   Wait-Log '\[hud\] ok: Bubble hidden' 5 $logLines | Write-Host
   $logLines = @(Get-Content $appLog).Count
-  Press-Keys @(0x11, 0x12, 0x10) 0x42
+  Press-Keys @(0x11, 0x10) 0x32
   Wait-Log '\[hud\] ok: Bubble is on' 5 $logLines | Write-Host
   foreach ($step in 'pin', 'unpin') {
     $c = Bubble-Center 'idle' $logLines
@@ -322,7 +322,7 @@ try {
   } 'CHROME JOB' 'true'
 
   # 6. The real packaged exe (what the installer puts on a PC), with fresh settings: the bubble
-  #    shows on a selection, Hide (Ctrl+Alt+Shift+B) hides it, and after a restart it is back.
+  #    shows on a selection, Hide (Ctrl+Shift+2) hides it, and after a restart it is back.
   $exe = Join-Path $root 'release\win-unpacked\Bidderr.exe'
   if (Test-Path $exe) {
     Write-Host '=== 6-packaged-exe'

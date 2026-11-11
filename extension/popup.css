@@ -1,0 +1,3 @@
+/* The popup is a small fixed-width page; the rest of the look comes from the shared style.css. */
+body { width: 360px; margin: 0; padding: 12px; }
+input[type="password"] { width: 100%; box-sizing: border-box; }

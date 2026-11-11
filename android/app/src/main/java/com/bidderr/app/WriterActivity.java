@@ -22,24 +22,25 @@ import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONObject;
 
 /**
- * The floating writer. Opened by "Write proposal" in Android's text-selection menu (or by the
- * B bubble). It shows only a small bubble at the bottom of the screen, over the job page:
+ * The floating writer. Opened by "Write proposal" in Android's text-selection menu, or with the
+ * copied job by the Quick Settings tile / the app icon's long-press shortcut. It shows only a small bubble at the bottom of the screen, over the job page:
  * "Writing proposal..." (sound 1) -> "Proposal ready" (sound 2), then closes by itself.
  * The work is done by assets/writer.html with the shared proposal engine.
  */
 public class WriterActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
-
-    private static WriterActivity current;
+    // Tile and app-icon shortcut: write from the job in the clipboard.
+    public static final String ACTION_WRITE_COPIED = "com.bidderr.app.WRITE_COPIED";
 
     private WebView web;
     private String pendingText;
     private boolean pageReady;
+    // Android 10+ lets an app read the clipboard only once its window has the focus.
+    private boolean readClipboardOnFocus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        current = this;
         float dp = getResources().getDisplayMetrics().density;
 
         // Only a strip at the bottom; taps above it go straight through to the job page.
@@ -81,14 +82,31 @@ public class WriterActivity extends Activity {
         });
         web.addJavascriptInterface(new Bridge(), "Android");
 
-        pendingText = textFrom(getIntent());
+        readIntent(getIntent());
         web.loadUrl("https://" + HOST + "/assets/writer.html");
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        pendingText = textFrom(intent);
+        readIntent(intent);
+        deliver();
+    }
+
+    private void readIntent(Intent intent) {
+        if (intent != null && ACTION_WRITE_COPIED.equals(intent.getAction())) readClipboardOnFocus = true;
+        else pendingText = textFrom(intent);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus || !readClipboardOnFocus) return;
+        readClipboardOnFocus = false;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = cm.getPrimaryClip();
+        CharSequence text = clip == null || clip.getItemCount() == 0 ? null : clip.getItemAt(0).coerceToText(this);
+        pendingText = text == null ? "" : text.toString(); // empty: the page says "copy the job first"
         deliver();
     }
 
@@ -100,12 +118,6 @@ public class WriterActivity extends Activity {
         return text == null ? null : text.toString();
     }
 
-    // Called by the bubble's Stop button: closing the page destroys the WebView, so the request stops.
-    static void stopWriting() {
-        WriterActivity a = current;
-        if (a != null) a.finish();
-    }
-
     private void deliver() {
         if (!pageReady || pendingText == null) return;
         web.evaluateJavascript("window.startWriting(" + JSONObject.quote(pendingText) + ")", null);
@@ -114,7 +126,6 @@ public class WriterActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        if (current == this) current = null;
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -124,17 +135,6 @@ public class WriterActivity extends Activity {
         public void copy(String text) {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             cm.setPrimaryClip(ClipData.newPlainText("Proposal", text));
-        }
-
-        // Tells the B bubble (if it is turned on) what is happening: writing | ready | idle.
-        @JavascriptInterface
-        public void bubble(String state, String proposal) {
-            BubbleService.signal(state, proposal);
-        }
-
-        @JavascriptInterface
-        public boolean isBubbleOn() {
-            return BubbleService.isRunning() && !BubbleService.isPaused(WriterActivity.this);
         }
 
         // Same encrypted API keys as the main app (see SecretStore).

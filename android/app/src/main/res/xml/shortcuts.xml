@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the Bidderr icon (or drag this to the home screen): writes from the copied job. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="write_copied"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/write_copied_short"
+        android:shortcutLongLabel="@string/write_copied_long">
+        <intent
+            android:action="com.bidderr.app.WRITE_COPIED"
+            android:targetPackage="com.bidderr.app"
+            android:targetClass="com.bidderr.app.WriterActivity" />
+    </shortcut>
+</shortcuts>

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "PPH Bidderr",
+  "short_name": "pph-bidderr",
+  "version": "1.0.0",
+  "description": "Writes your PeoplePerHour proposal by itself: open a job's proposal page and the proposal box fills in. You check it and press Send.",
+  "icons": { "128": "icon.png" },
+  "action": { "default_title": "PPH Bidderr", "default_popup": "popup.html", "default_icon": "icon.png" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.groq.com/*",
+    "https://openrouter.ai/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.peopleperhour.com/freelance-jobs/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

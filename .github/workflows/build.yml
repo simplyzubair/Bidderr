@@ -116,7 +116,7 @@ jobs:
           name: e2e-windows
           path: ${{ runner.temp }}/bidderr-e2e/*
 
-  # Real emulator test: share a job, tap the bubble over Chrome.
+  # Real emulator test: share a job, the text menu, and the tile / app-icon shortcut.
   e2e-android:
     needs: android
     runs-on: ubuntu-latest

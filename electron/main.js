@@ -13,8 +13,8 @@ const { copySelection, pasteClipboard } = require('./copySelection.js');
 const { startSelectionWatch } = require('./selectionWatch.js');
 
 const DEFAULT_HOTKEY = 'Ctrl+Shift+1';
-// Shows / hides the bubble. Three modifiers, so it does not clash with other apps.
-const BUBBLE_HOTKEY = 'Ctrl+Alt+Shift+B';
+// Shows / hides the bubble. Next to the write key (Ctrl+Shift+1), so it is easy to remember.
+const BUBBLE_HOTKEY = 'Ctrl+Shift+2';
 const ICON = path.join(__dirname, '../public/icon.png');
 const TRAY_ICON = path.join(__dirname, '../public/tray.png');
 
@@ -214,7 +214,7 @@ function pinnedAt() {
 // "Pause 30 min" in the ring: no bubble until then (only in memory, a restart ends it).
 let snoozeUntil = 0;
 let snoozeTimer = null;
-// "Hide" in the ring or Ctrl+Alt+Shift+B: hidden until that key is pressed again or Bidderr
+// "Hide" in the ring or Ctrl+Shift+2: hidden until that key is pressed again or Bidderr
 // restarts. Only the switch in the Bidderr window / tray menu turns it off for good, so a hidden
 // bubble can never be "lost" forever.
 let hiddenForNow = false;
@@ -340,7 +340,7 @@ function setBubbleShown(on, { tell = true } = {}) {
   }
 }
 
-// Ring "Hide" and Ctrl+Alt+Shift+B: hides it until the key is pressed again or Bidderr restarts.
+// Ring "Hide" and Ctrl+Shift+2: hides it until the key is pressed again or Bidderr restarts.
 function hideForNow() {
   hiddenForNow = true;
   snoozeUntil = 0;
@@ -433,8 +433,8 @@ function dragBubble(phase, x, y) {
 // ---------- the main action ----------
 
 // From the hotkey or the bubble: copy the selected job text first. From the tray or the main
-// window: use the text already in the clipboard.
-async function writeProposal({ fromSelection = false, at = null } = {}) {
+// window: use the job pasted in the window's box, or else the text already in the clipboard.
+async function writeProposal({ fromSelection = false, at = null, job: typedJob = '' } = {}) {
   if (busy) return;
   busy = true;
   const stop = new AbortController();
@@ -448,7 +448,7 @@ async function writeProposal({ fromSelection = false, at = null } = {}) {
   try {
     if (!getApiKey() && !getBackupKey()) throw new Error('No API key yet. Click here to add your free Google key.');
     showBubble('writing', 'Writing proposal...', 'Reading the job', { sound: 'writing', at });
-    let job = clipboard.readText();
+    let job = typedJob || clipboard.readText();
     if (fromSelection) {
       const result = await copySelection();
       job = result.text;
@@ -705,7 +705,7 @@ ipcMain.handle('save-key', async (_e, key) => {
   return { state: check, ...keyState() };
 });
 ipcMain.handle('copy-text', (_e, text) => clipboard.writeText(String(text || '')));
-ipcMain.handle('write-now', () => writeProposal());
+ipcMain.handle('write-now', (_e, job) => writeProposal({ job: String(job || '').trim().slice(0, 50000) }));
 ipcMain.handle('get-profiles', () => profilesView());
 ipcMain.handle('set-profile', (_e, id) => {
   if (PROFILES.some((p) => p.id === id)) saveSettings({ profile: id });
@@ -817,7 +817,7 @@ if (!app.requestSingleInstanceLock()) {
     tray = new Tray(TRAY_ICON);
     // The saved shortcut, or Ctrl+Shift+1. A saved one that no longer works falls back to the default.
     const saved = loadSettings().hotkey;
-    if (!(isValidHotkey(saved) && setHotkey(saved))) setHotkey(DEFAULT_HOTKEY);
+    if (!(isValidHotkey(saved) && saved !== BUBBLE_HOTKEY && setHotkey(saved))) setHotkey(DEFAULT_HOTKEY);
     tray.setToolTip(`Bidderr - select a job, click the bubble or press ${hotkey || DEFAULT_HOTKEY}`);
     tray.on('click', openSettings);
     let bubbleHotkeyOk = false;

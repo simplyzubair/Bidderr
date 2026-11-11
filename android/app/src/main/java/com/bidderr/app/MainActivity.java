@@ -3,14 +3,12 @@ package com.bidderr.app;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.text.TextUtils;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -18,7 +16,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewAssetLoader;
@@ -34,18 +31,16 @@ import java.net.URL;
 
 /**
  * Shows the Bidderr page (assets/index.html) in a WebView. The page does the real work with the
- * shared proposal engine; this class passes in text from the bubble, "Write proposal" or Share,
+ * shared proposal engine; this class passes in text from "Write proposal" or Share,
  * and gives the page clipboard access and app updates.
  */
 public class MainActivity extends Activity {
-    public static final String ACTION_FROM_BUBBLE = "com.bidderr.app.FROM_BUBBLE";
     private static final String HOST = "appassets.androidplatform.net";
     // Updates are only ever downloaded from this project's GitHub releases.
     private static final String UPDATE_PREFIX = "https://github.com/simplyzubair/Bidderr/releases/download/";
 
     private WebView web;
     private String pendingText;
-    private boolean pendingFromBubble;
     private boolean pageReady;
 
     @Override
@@ -105,7 +100,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // The user may come back from the Accessibility or "unknown apps" settings.
+        // The user may come back from the "unknown apps" settings.
         if (pageReady) web.evaluateJavascript("window.onAppResumed && window.onAppResumed()", null);
     }
 
@@ -115,34 +110,22 @@ public class MainActivity extends Activity {
         CharSequence text = null;
         if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
             text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
-        } else if (Intent.ACTION_SEND.equals(action) || ACTION_FROM_BUBBLE.equals(action)) {
+        } else if (Intent.ACTION_SEND.equals(action)) {
             text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         }
         if (text == null) return;
         pendingText = text.toString();
-        pendingFromBubble = ACTION_FROM_BUBBLE.equals(action);
     }
 
     private void deliverPendingText() {
         if (!pageReady || pendingText == null) return;
-        web.evaluateJavascript("window.onJobText(" + JSONObject.quote(pendingText) + ", "
-                + pendingFromBubble + ")", null);
+        web.evaluateJavascript("window.onJobText(" + JSONObject.quote(pendingText) + ")", null);
         pendingText = null;
     }
 
     private void callPage(String function, String value) {
         runOnUiThread(() -> web.evaluateJavascript(
                 "window." + function + " && window." + function + "(" + JSONObject.quote(value) + ")", null));
-    }
-
-    private boolean bubbleEnabled() {
-        String enabled = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        if (enabled == null) return false;
-        String me = new ComponentName(this, BubbleService.class).flattenToString();
-        TextUtils.SimpleStringSplitter split = new TextUtils.SimpleStringSplitter(':');
-        split.setString(enabled);
-        for (String s : split) if (s.equalsIgnoreCase(me)) return true;
-        return false;
     }
 
     private void downloadAndInstall(String url) {
@@ -193,32 +176,6 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "0.0.0";
             }
-        }
-
-        // After a bubble proposal: tell the user, then go straight back to the job page.
-        @JavascriptInterface
-        public void backToJob() {
-            runOnUiThread(() -> {
-                Toast.makeText(MainActivity.this, "Proposal ready and copied. Return to the job and paste it.", Toast.LENGTH_LONG).show();
-                moveTaskToBack(true);
-            });
-        }
-
-        @JavascriptInterface
-        public boolean isBubbleOn() {
-            return bubbleEnabled();
-        }
-
-        @JavascriptInterface
-        public void openBubbleSettings() {
-            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-        }
-
-        // Android 13+: "Allow restricted settings" is in the ⋮ menu of this screen.
-        @JavascriptInterface
-        public void openAppInfo() {
-            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + getPackageName())));
         }
 
         // The API keys, encrypted by the Android Keystore (see SecretStore).

@@ -25,9 +25,10 @@ The key is saved on this device only (encrypted), so set it up separately on eac
   The selection bubble can be turned off in the window or the tray menu, or set to show only in web browsers.
 - **Right-click the bubble** for the action ring: Stop writing, Copy again, Open Bidderr, Pin here / Unpin,
   Restart, Quit, Hide, Pause 30 min. Drag the bubble to pin it in one spot (a pinned bubble stays on screen).
-  `Ctrl+Alt+Shift+B` (or Hide in the ring) hides the bubble until you press it again or restart Bidderr;
+  `Ctrl+Shift+2` (or Hide in the ring) hides the bubble until you press it again or restart Bidderr;
   the switch in the Bidderr window turns it off for good.
 - The shortcut can be changed under **Shortcut** in the window.
+- By hand: open Bidderr, paste the job post in the box under **Write a proposal**, press **Write proposal**.
 - **Recent proposals** keeps your last 30 proposals on the PC, each with a Copy button.
 - New versions download by themselves (checked at start and every hour). Press **Update now** (window, tray menu or the corner box) to install; otherwise it installs when Bidderr quits.
 
@@ -37,11 +38,21 @@ The key is saved on this device only (encrypted), so set it up separately on eac
 - Select the job text in Chrome or the Upwork app and tap **✍ Write proposal** in the text menu.
   Only a small bubble shows at the bottom (the app does not open): sound 1 = writing, sound 2 = proposal ready.
   Wait for the ready message, return to the job, then paste.
-- Optional **B bubble** (Accessibility; the app shows the steps): tap B on a job page to write without
-  selecting. When ready it turns into a green **Paste** button that pastes into the box you tapped.
-- Quick on/off for the B bubble: add the **Bidderr bubble** tile to Quick Settings.
+- Shortcut (no Accessibility, so banking apps stay happy): copy the job, then tap the **Write proposal**
+  tile in Quick Settings, or long-press the Bidderr icon and tap **Write proposal**.
+- By hand: open Bidderr, paste the job post in the box, tap **Write proposal**.
 - **Recent proposals** keeps your last 30 proposals on the phone.
 - When an update is out, the app shows **Update now**.
+
+## 4. PPH Bidderr (Chrome / Edge extension, PeoplePerHour only)
+
+- Install: open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**,
+  click **Load unpacked** and pick the `extension` folder.
+- Click the extension icon: paste your Google key (and optional backup key), pick your work.
+- On PeoplePerHour, open a job and start a proposal. When the proposal box shows up, PPH Bidderr reads
+  the whole page, writes the proposal and puts it in the box. It never presses Send: read it first.
+- Turn off **Write by itself** in the popup to only write when you press **Write proposal on this page**.
+- It uses each profile's default writing instructions (custom prompts from the apps are not copied over).
 
 ## Profiles and prompts
 
@@ -56,7 +67,9 @@ To change a profile's prompt: pick it, open **Advanced: writing instructions**, 
 
 - `shared/proposal.js` is the engine (prompt, Gemini call, formatting). Both apps use it.
 - `electron/` is the Windows tray app. `android/` is the Android app: a WebView showing `assets/index.html`,
-  plus `BubbleService` (accessibility service that draws the bubble and reads the screen text when tapped).
+  plus `WriterActivity` (the small floating writer) and `WriteTileService` (the Quick Settings tile).
+- `extension/` is PPH Bidderr. It keeps copies of `shared/proposal.js`, `ui.js` and `style.css`
+  (a test checks they match): after changing those, run `cp shared/{proposal.js,ui.js,style.css} extension/`.
 - `website/` is the download page, served by host nginx on Contabo from `/var/www/bidderr`.
   Deploy changes with `bash scripts/deploy-website.sh`.
 - `npm test` runs the tests. `npm start` runs the Windows app (it can use the `BIDDERR_API_KEY` env var).

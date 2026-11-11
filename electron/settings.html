@@ -74,7 +74,7 @@
       </div>
       <span id="ready-pill" class="pill">Loading</span>
     </div>
-    <p class="muted">Copy a job post, then use the button below. Bidderr copies your proposal when it is ready.</p>
+    <p class="muted">Paste a job post in the box (or just copy it), then use the button below. Bidderr copies your proposal when it is ready.</p>
     <fieldset class="profiles">
       <legend>Your work</legend>
       <div id="profiles" class="profile-list"></div>
@@ -84,13 +84,14 @@
       <div class="flow-step"><b>2</b><span>Write</span></div>
       <div class="flow-step"><b>3</b><span>Paste when ready</span></div>
     </div>
-    <div class="row"><button id="write" class="btn primary big block">Write from copied job</button></div>
+    <textarea id="job" placeholder="Paste the job post here. Leave it empty to use the job you copied." spellcheck="false"></textarea>
+    <div class="row"><button id="write" class="btn primary big block">Write proposal</button></div>
     <p class="helper-note">Or select job text and press <span id="hotkey-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>1</kbd></span>, or click the Bidderr bubble.</p>
     <label class="switch-row">
       <input id="selection-bubble" type="checkbox" checked>
       <span>Show the Bidderr bubble when I select text</span>
     </label>
-    <p class="helper-note">Right-click the bubble for more: stop, pin, hide, pause, restart, quit. Drag it to pin it in one spot. <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd><kbd>B</kbd> hides or shows it.</p>
+    <p class="helper-note">Right-click the bubble for more: stop, pin, hide, pause, restart, quit. Drag it to pin it in one spot. <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>2</kbd> hides or shows it.</p>
     <label class="switch-row">
       <input id="browsers-only" type="checkbox">
       <span>Only show the bubble in web browsers</span>
