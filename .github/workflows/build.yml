@@ -163,10 +163,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+      # The PPH Bidderr Chrome extension, zipped for the download page.
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: extension
+      - run: cd src/extension && zip -r "$GITHUB_WORKSPACE/pph-bidderr.zip" .
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: v${{ needs.version.outputs.version }}
         run: |
           gh release create "$VERSION" --target "${{ github.sha }}" --title "Bidderr $VERSION" --generate-notes \
-            Bidderr.apk Bidderr-Setup.exe Bidderr-Setup.exe.blockmap latest.yml
+            Bidderr.apk Bidderr-Setup.exe Bidderr-Setup.exe.blockmap latest.yml pph-bidderr.zip
