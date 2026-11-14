@@ -47,10 +47,28 @@
   }
 
   // Native setter (works for React too) plus the events PPH's jQuery form listens to.
-  function fill(box, text) {
-    box.focus();
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(box, text.slice(0, MAX_CHARS));
-    for (const type of ['input', 'keyup', 'change']) box.dispatchEvent(new Event(type, { bubbles: true }));
+  function fill(el, text) {
+    el.focus();
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, text);
+    for (const type of ['input', 'keyup', 'change']) el.dispatchEvent(new Event(type, { bubbles: true }));
+  }
+
+  // The "Proposal Breakdown" boxes: ITEM gets the job title, AMOUNT the price from the proposal
+  // (the proposal only has one when the job states a fixed budget). Boxes the user already
+  // filled are left alone. Deposit stays the user's choice.
+  function fillBreakdown(box, proposal) {
+    const form = box.closest('form') || document;
+    const empty = (selector) => {
+      const el = form.querySelector(selector);
+      return el && el.offsetParent !== null && !el.disabled && !el.readOnly && !el.value.trim() ? el : null;
+    };
+    const item = empty('input.fixed-description, input[placeholder="enter description"]');
+    const title = document.querySelector('h1')?.innerText.trim();
+    if (item && title) fill(item, title.slice(0, item.maxLength > 0 ? item.maxLength : 40));
+    // NFKC turns the proposal's Unicode-bold "Price: $50" back into plain letters and digits.
+    const price = proposal.normalize('NFKC').match(/Price:\s*[$£€]\s*(\d+(?:\.\d{1,2})?)/i)?.[1];
+    const amount = empty('input.fixed-cost');
+    if (amount && price) fill(amount, price);
   }
 
   function write(box) {
@@ -68,8 +86,9 @@
       port.onMessage.addListener(({ progress, proposal, error }) => {
         if (progress) status(`Writing... ${progress.split(/\s+/).length} words`);
         if (proposal) {
-          fill(box, proposal);
-          status('Proposal ready in the box. Read it, then press Send yourself.', 'ok');
+          fill(box, proposal.slice(0, MAX_CHARS));
+          fillBreakdown(box, proposal);
+          status('Proposal ready. Check the text, item and amount, then press Send yourself.', 'ok');
           finish({ ok: true, text: 'Proposal written into the box.' });
         }
         if (error) {

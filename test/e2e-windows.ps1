@@ -212,6 +212,10 @@ try {
   Wait-Log 'hotkey registered=True|hotkey registered=true' 40 | Write-Host
   Start-Sleep 2
   Shot '0-started'
+  # Bidderr starts with the bubble hidden: Ctrl+Shift+2 shows it for the bubble tests below.
+  $logLines = @(Get-Content $appLog).Count
+  Press-Keys @(0x11, 0x10) 0x32
+  Wait-Log '\[hud\] ok: Bubble is on' 5 $logLines | Write-Host
 
   # 1. Notepad: select all, press the hotkey. No Ctrl+C.
   $jobFile = Join-Path $work 'job.txt'
@@ -321,8 +325,9 @@ try {
     }
   } 'CHROME JOB' 'true'
 
-  # 6. The real packaged exe (what the installer puts on a PC), with fresh settings: the bubble
-  #    shows on a selection, Hide (Ctrl+Shift+2) hides it, and after a restart it is back.
+  # 6. The real packaged exe (what the installer puts on a PC), with fresh settings: it starts
+  #    with the bubble hidden, Ctrl+Shift+2 shows it, Hide in the ring hides it, and after a
+  #    restart Ctrl+Shift+2 brings it back.
   $exe = Join-Path $root 'release\win-unpacked\Bidderr.exe'
   if (Test-Path $exe) {
     Write-Host '=== 6-packaged-exe'
@@ -346,7 +351,22 @@ try {
       Bubble-Center 'offer' $n | Out-Null
       return $n
     }
+    $showBubble = {
+      $n = @(Get-Content $appLog).Count
+      Press-Keys @(0x11, 0x10) 0x32
+      Wait-Log '\[hud\] ok: Bubble is on' 5 $n | Write-Host
+    }
+    $selectWhileHidden = {
+      $n = @(Get-Content $appLog).Count
+      Focus-Process $np2
+      $r = [E2E.Win]::Rect($np2.MainWindowHandle)
+      Drag ($r.Left + 30) ($r.Top + 110) ($r.Left + 420) ($r.Top + 175)
+      Start-Sleep 2
+      if (@(Get-Content $appLog | Select-Object -Skip $n | Select-String -Pattern '\[bubble\] offer').Count -gt 0) { throw '6 - the bubble showed while hidden' }
+    }
     & $startExe
+    & $selectWhileHidden   # hidden by default
+    & $showBubble
     $n = & $selectInNotepad
     Shot '6a-packaged-bubble'
     $c = Bubble-Center 'offer' $n
@@ -360,16 +380,12 @@ try {
     Click-At ([int]($x + $w / 2 - $w / 236 * 82)) ([int]($y + $h / 2))
     Wait-Log '\[hud\] ok: Bubble hidden' 5 $n | Write-Host
     # Hidden: a new selection shows nothing.
-    $n = @(Get-Content $appLog).Count
-    Focus-Process $np2
-    $r = [E2E.Win]::Rect($np2.MainWindowHandle)
-    Drag ($r.Left + 30) ($r.Top + 110) ($r.Left + 420) ($r.Top + 175)
-    Start-Sleep 2
-    if (@(Get-Content $appLog | Select-Object -Skip $n | Select-String -Pattern '\[bubble\] offer').Count -gt 0) { throw '6 - the bubble showed while hidden' }
-    # Restart: the bubble is back.
+    & $selectWhileHidden
+    # Restart: the key brings the bubble back.
     Get-Process Bidderr -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
     Start-Sleep 2
     & $startExe
+    & $showBubble
     & $selectInNotepad | Out-Null
     Shot '6c-packaged-after-restart'
     Write-Host 'PASS 6-packaged-exe'

@@ -18,6 +18,7 @@ The key is saved on this device only (encrypted), so set it up separately on eac
 ## 2. Windows
 
 - Install `Bidderr-Setup.exe`. If Windows warns you, click **More info → Run anyway** (the app is not code-signed).
+  Remove it like any app: **Settings → Apps → Installed apps → Bidderr → Uninstall** (your settings are kept).
 - Bidderr lives in the tray, near the clock, and starts with Windows.
 - Use it: select the job post (drag over it, triple-click it, or `Ctrl+A`). The round **Bidderr bubble**
   pops up next to the mouse: click it (or press **`Ctrl+Shift+1`**). Wait for the green paste badge,
@@ -25,8 +26,8 @@ The key is saved on this device only (encrypted), so set it up separately on eac
   The selection bubble can be turned off in the window or the tray menu, or set to show only in web browsers.
 - **Right-click the bubble** for the action ring: Stop writing, Copy again, Open Bidderr, Pin here / Unpin,
   Restart, Quit, Hide, Pause 30 min. Drag the bubble to pin it in one spot (a pinned bubble stays on screen).
-  `Ctrl+Shift+2` (or Hide in the ring) hides the bubble until you press it again or restart Bidderr;
-  the switch in the Bidderr window turns it off for good.
+  Bidderr starts with the bubble hidden: `Ctrl+Shift+2` shows it, and hides it again (so does Hide in the ring).
+  The switch in the Bidderr window turns it off for good.
 - The shortcut can be changed under **Shortcut** in the window.
 - By hand: open Bidderr, paste the job post in the box under **Write a proposal**, press **Write proposal**.
 - **Recent proposals** keeps your last 30 proposals on the PC, each with a Copy button.
@@ -48,11 +49,13 @@ The key is saved on this device only (encrypted), so set it up separately on eac
 
 - Install: open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**,
   click **Load unpacked** and pick the `extension` folder.
-- Click the extension icon: paste your Google key (and optional backup key), pick your work.
+- No key needed when Bidderr for Windows is running on the same PC: the extension asks the app to write,
+  with the app's API key, work profile and writing instructions. Without the app, click the extension
+  icon and paste a Google key there (it then uses each profile's default instructions).
 - On PeoplePerHour, open a job and start a proposal. When the proposal box shows up, PPH Bidderr reads
-  the whole page, writes the proposal and puts it in the box. It never presses Send: read it first.
+  the whole page, writes the proposal and fills the proposal box, the **Item** (job title) and, when the
+  job states a fixed budget, the **Amount**. It never presses Send and never touches Deposit: check it first.
 - Turn off **Write by itself** in the popup to only write when you press **Write proposal on this page**.
-- It uses each profile's default writing instructions (custom prompts from the apps are not copied over).
 
 ## Profiles and prompts
 

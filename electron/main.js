@@ -11,6 +11,7 @@ const {
 } = require('../shared/proposal.js');
 const { copySelection, pasteClipboard } = require('./copySelection.js');
 const { startSelectionWatch } = require('./selectionWatch.js');
+const { startExtensionServer } = require('./extensionServer.js');
 
 const DEFAULT_HOTKEY = 'Ctrl+Shift+1';
 // Shows / hides the bubble. Next to the write key (Ctrl+Shift+1), so it is easy to remember.
@@ -214,10 +215,9 @@ function pinnedAt() {
 // "Pause 30 min" in the ring: no bubble until then (only in memory, a restart ends it).
 let snoozeUntil = 0;
 let snoozeTimer = null;
-// "Hide" in the ring or Ctrl+Shift+2: hidden until that key is pressed again or Bidderr
-// restarts. Only the switch in the Bidderr window / tray menu turns it off for good, so a hidden
-// bubble can never be "lost" forever.
-let hiddenForNow = false;
+// Bidderr starts with the bubble hidden; Ctrl+Shift+2 (or the tray menu) shows it, and that key
+// or "Hide" in the ring hides it again. Only in memory, so every start is the same.
+let hiddenForNow = true;
 const bubbleAllowed = () => selectionBubbleOn() && !hiddenForNow && Date.now() >= snoozeUntil;
 
 function scheduleBubbleHide() {
@@ -340,14 +340,14 @@ function setBubbleShown(on, { tell = true } = {}) {
   }
 }
 
-// Ring "Hide" and Ctrl+Shift+2: hides it until the key is pressed again or Bidderr restarts.
+// Ring "Hide" and Ctrl+Shift+2: hides it until the key is pressed again.
 function hideForNow() {
   hiddenForNow = true;
   snoozeUntil = 0;
   clearTimeout(snoozeTimer);
   tray?.setContextMenu(buildTrayMenu());
   if (!busy) closeBubble();
-  showHud('ok', 'Bubble hidden', `Press ${BUBBLE_HOTKEY} (or restart Bidderr) to show it again`);
+  showHud('ok', 'Bubble hidden', `Press ${BUBBLE_HOTKEY} to show it again`);
 }
 const toggleBubble = () => (bubbleAllowed() ? hideForNow() : setBubbleShown(true));
 
@@ -852,8 +852,27 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
 
+    // The PPH Bidderr browser extension writes with this app's key.
+    startExtensionServer({
+      log,
+      hasKey: () => Boolean(getApiKey() || getBackupKey()),
+      write: async (job, signal) => {
+        const proposal = await generateProposal(job, getApiKey(), {
+          prompt: getPrompt(), apiBase: API_BASE, backupKey: getBackupKey(), log,
+          fetchImpl: (url, options) => fetch(url, {
+            ...options, signal: options?.signal ? AbortSignal.any([signal, options.signal]) : signal,
+          }),
+        });
+        remember(job, proposal);
+        return proposal;
+      },
+    });
+
     // First run of the installed app: start with Windows (can be turned off in the tray menu).
-    if (!DEV && !loadSettings().startupSet) {
+    // Only a real install (it has an uninstaller next to it): a test copy must never register
+    // itself, or it keeps starting after Bidderr is uninstalled.
+    const installed = fs.existsSync(path.join(path.dirname(process.execPath), 'Uninstall Bidderr.exe'));
+    if (installed && !loadSettings().startupSet) {
       app.setLoginItemSettings({ openAtLogin: true });
       saveSettings({ startupSet: true });
     }
@@ -866,7 +885,7 @@ if (!app.requestSingleInstanceLock()) {
     if ((!getApiKey() && !getBackupKey()) || !hotkeyOk) openSettings();
     else {
       hudWindow.webContents.once('did-finish-load', () =>
-        showHud('ok', 'Bidderr is running', 'Select a job post, then click the Write bubble'));
+        showHud('ok', 'Bidderr is running', `Select a job post, then press ${hotkey}. ${BUBBLE_HOTKEY} shows the bubble`));
     }
     setupAutoUpdates();
   });

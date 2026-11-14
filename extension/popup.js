@@ -6,9 +6,16 @@ const store = chrome.storage.local;
 
 async function show() {
   const { key = '', backupKey = '', profile = DEFAULT_PROFILE, auto = true } = await store.get(['key', 'backupKey', 'profile', 'auto']);
-  setNote($('key-pill'), key ? maskKey(key) : 'No key', key ? 'ok' : 'error');
+  // Bidderr for Windows shares its key (and writes with its own settings) while it is running.
+  const app = await fetch('http://127.0.0.1:47615/ping', { method: 'POST' }).then((r) => r.json()).catch(() => null);
+  const shared = Boolean(app?.hasKey);
+  setNote($('app-note'), shared ? 'Using the API key from Bidderr for Windows. No key needed here.'
+    : app ? 'Bidderr for Windows is running but has no API key yet. Add it there, or below.'
+    : 'Bidderr for Windows is not running. Start it to use its API key, or add a key below.', shared ? 'ok' : 'warn');
+  if (shared) setNote($('key-pill'), key ? maskKey(key) : 'From Bidderr', 'ok');
+  else setNote($('key-pill'), key ? maskKey(key) : 'No key', key ? 'ok' : 'error');
   setNote($('backup-pill'), backupKey ? maskKey(backupKey) : 'Off', backupKey ? 'ok' : '');
-  $('key-card').open = !key && !backupKey;
+  $('key-card').open = !shared && !key && !backupKey;
   $('remove-backup').disabled = !backupKey;
   $('auto').checked = auto;
   renderProfiles($('profiles'), PROFILES, profile, async (id) => {
