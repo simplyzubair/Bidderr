@@ -142,7 +142,7 @@ function Shot([string]$name) {
   $g.Dispose(); $bmp.Dispose()
 }
 
-$BOLD_D = [char]::ConvertFromUtf32(0x1D403)   # the Unicode bold "D" of "Delivery Time"
+$PLAIN_LINE = 'Delivery Time: 6 hours'   # proposals are plain text: no ** and no bold letters
 
 # Like a person selecting text: press, move in small steps, let go.
 function Drag([int]$x1, [int]$y1, [int]$x2, [int]$y2) {
@@ -186,10 +186,10 @@ function Run-Case([string]$name, [scriptblock]$prepare, [string]$expectJob, [str
   $clipboardDeadline = (Get-Date).AddSeconds(3)
   do {
     $clip = Get-Clipboard -Raw
-    if ($clip.Contains($BOLD_D) -and $clip.Contains('Best,')) { break }
+    if ($clip.Contains($PLAIN_LINE) -and $clip.Contains('Best,')) { break }
     Start-Sleep -Milliseconds 100
   } while ((Get-Date) -lt $clipboardDeadline)
-  if (-not $clip.Contains($BOLD_D) -or -not $clip.Contains('Best,')) { throw "$name - clipboard does not hold the proposal: $clip" }
+  if (-not $clip.Contains($PLAIN_LINE) -or -not $clip.Contains('Best,')) { throw "$name - clipboard does not hold the proposal: $clip" }
   $sent = @(Get-Content $mockLog | Select-Object -Skip $mockLines)
   if ($sent.Count -lt 1) { throw "$name - Bidderr never called the API" }
   $job = ($sent[-1] | ConvertFrom-Json).job
@@ -268,7 +268,7 @@ try {
   Press-Keys @(0x11) 0x43 # Ctrl+C
   Start-Sleep -Milliseconds 300
   $all = Get-Clipboard -Raw
-  if (-not ($all.Contains('BUBBLE JOB') -and $all.Contains('Best,') -and $all.Contains($BOLD_D))) { throw "4 - the proposal was not pasted into Notepad: $all" }
+  if (-not ($all.Contains('BUBBLE JOB') -and $all.Contains('Best,') -and $all.Contains($PLAIN_LINE))) { throw "4 - the proposal was not pasted into Notepad: $all" }
   Write-Host 'PASS 4-bubble-select-write-paste'
 
   # 5. Ctrl+Shift+2 hides and shows the bubble; right-click opens the ring; Pin, then Unpin.

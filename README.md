@@ -53,8 +53,9 @@ The key is saved on this device only (encrypted), so set it up separately on eac
   with the app's API key, work profile and writing instructions. Without the app, click the extension
   icon and paste a Google key there (it then uses each profile's default instructions).
 - On PeoplePerHour, open a job and start a proposal. When the proposal box shows up, PPH Bidderr reads
-  the whole page, writes the proposal and fills the proposal box, the **Item** (job title) and, when the
-  job states a fixed budget, the **Amount**. It never presses Send and never touches Deposit: check it first.
+  the whole page, writes the proposal and fills the proposal box and the **Item** (job title). When the
+  job has a fixed budget, **Amount** and **Deposit** are both set to that budget (PPH fills Total and
+  You'll earn). It never presses Send: check it first.
 - Turn off **Write by itself** in the popup to only write when you press **Write proposal on this page**.
 
 ## Profiles and prompts

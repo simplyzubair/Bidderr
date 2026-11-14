@@ -39,11 +39,20 @@
     return guess ? [...document.querySelectorAll('textarea')].find(usable) || null : null;
   }
 
+  // The buyer's fixed budget as PPH shows it, for example "£1,000.00" ('' for hourly jobs or none).
+  function budget() {
+    const stats = document.querySelector('.job-stats .budget');
+    if (!stats || !/fixed/i.test(stats.querySelector('label')?.textContent || '')) return '';
+    return stats.querySelector('.price-tag > span[title]')?.title.trim() || '';
+  }
+
   // "Copy all page": the whole job part of the page (title, description, budget, skills,
-  // client info), or the whole page if PPH changes its layout.
+  // client info), or the whole page if PPH changes its layout. The exact budget goes on its own
+  // line, because the page only shows a rounded one ("£1.0k").
   function pageText() {
     const main = document.querySelector(PPH_JOB) || document.querySelector('main') || document.body;
-    return main.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    const text = main.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    return budget() ? `${text}\n\nFixed budget stated by the buyer: ${budget()}` : text;
   }
 
   // Native setter (works for React too) plus the events PPH's jQuery form listens to.
@@ -53,22 +62,23 @@
     for (const type of ['input', 'keyup', 'change']) el.dispatchEvent(new Event(type, { bubbles: true }));
   }
 
-  // The "Proposal Breakdown" boxes: ITEM gets the job title, AMOUNT the price from the proposal
-  // (the proposal only has one when the job states a fixed budget). Boxes the user already
-  // filled are left alone. Deposit stays the user's choice.
-  function fillBreakdown(box, proposal) {
-    const form = box.closest('form') || document;
-    const empty = (selector) => {
-      const el = form.querySelector(selector);
-      return el && el.offsetParent !== null && !el.disabled && !el.readOnly && !el.value.trim() ? el : null;
-    };
-    const item = empty('input.fixed-description, input[placeholder="enter description"]');
+  // The "Proposal Breakdown" boxes (names checked in PPH's own form code, 2026-11-14):
+  // ITEM gets the job title; AMOUNT and DEPOSIT get the buyer's fixed budget. PPH works out
+  // TOTAL and YOU'LL EARN by itself. Item and amount boxes the user already filled are left alone.
+  function fillBreakdown() {
+    const form = document.querySelector('[data-hook="proposal-form"]') || document;
+    const open = (selector) => [...form.querySelectorAll(selector)]
+      .find((el) => el.offsetParent !== null && !el.disabled && !el.readOnly);
+    const item = open('section.item input.description, section.row input.description, input[placeholder="enter description"]');
     const title = document.querySelector('h1')?.innerText.trim();
-    if (item && title) fill(item, title.slice(0, item.maxLength > 0 ? item.maxLength : 40));
-    // NFKC turns the proposal's Unicode-bold "Price: $50" back into plain letters and digits.
-    const price = proposal.normalize('NFKC').match(/Price:\s*[$£€]\s*(\d+(?:\.\d{1,2})?)/i)?.[1];
-    const amount = empty('input.fixed-cost');
-    if (amount && price) fill(amount, price);
+    if (item && !item.value.trim() && title) fill(item, title.slice(0, item.maxLength > 0 ? item.maxLength : 40));
+    const price = budget().replace(/[^\d.]/g, ''); // "£1,000.00" -> "1000.00"
+    if (!(Number(price) > 0)) return;
+    const amount = open('section.item input.total, section.row input.total');
+    if (amount && !Number(amount.value)) fill(amount, String(Number(price)));
+    // Last: PPH suggests its own deposit when the amount changes; the user wants the full budget.
+    const deposit = open('input.deposit');
+    if (deposit) fill(deposit, String(Number(price)));
   }
 
   function write(box) {
@@ -87,8 +97,8 @@
         if (progress) status(`Writing... ${progress.split(/\s+/).length} words`);
         if (proposal) {
           fill(box, proposal.slice(0, MAX_CHARS));
-          fillBreakdown(box, proposal);
-          status('Proposal ready. Check the text, item and amount, then press Send yourself.', 'ok');
+          fillBreakdown();
+          status('Proposal ready. Check the text, item, amount and deposit, then press Send yourself.', 'ok');
           finish({ ok: true, text: 'Proposal written into the box.' });
         }
         if (error) {

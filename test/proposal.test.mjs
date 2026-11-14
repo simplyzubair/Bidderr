@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const {
-  generateProposal, formatProposal, toUnicodeBold, MODELS, DEFAULT_PROMPT, checkApiKey, maskKey, forgetFailedModels,
+  generateProposal, formatProposal, MODELS, DEFAULT_PROMPT, checkApiKey, maskKey, forgetFailedModels,
 } = require('../shared/proposal.js');
 
 beforeEach(() => forgetFailedModels());
@@ -24,13 +24,9 @@ function fakeFetch(responses) {
 
 const answer = (text) => ({ body: { candidates: [{ content: { parts: [{ text }] } }] } });
 
-test('toUnicodeBold converts letters and digits only', () => {
-  assert.equal(toUnicodeBold('Ab 6$'), '𝐀𝐛 𝟔$');
-});
-
-test('formatProposal bolds ** lines, strips headings and em dashes', () => {
+test('formatProposal removes ** marks, headings and em dashes', () => {
   const out = formatProposal('## Hello Sarah,\n\n\n\nI can help — fast.\n5. **Delivery Time: 6 hours**');
-  assert.equal(out, 'Hello Sarah,\n\nI can help, fast.\n5. 𝐃𝐞𝐥𝐢𝐯𝐞𝐫𝐲 𝐓𝐢𝐦𝐞: 𝟔 𝐡𝐨𝐮𝐫𝐬');
+  assert.equal(out, 'Hello Sarah,\n\nI can help, fast.\n5. Delivery Time: 6 hours');
 });
 
 test('generateProposal sends the prompt and job to Gemini', async () => {
@@ -171,7 +167,8 @@ test('there are three profiles, each with its own Offer Summary', () => {
   assert.match(defaultPromptFor('design'), /PSD/);
   assert.equal(defaultPromptFor('nope'), DEFAULT_PROMPT);
   for (const p of PROFILES) {
-    assert.match(p.prompt, /\*\*Price: \$\*\*/);
+    assert.match(p.prompt, /^\d\. Price: \$$/m);
+    assert.doesNotMatch(p.prompt, /\*\*[A-Z]/);
     assert.match(p.prompt, /Answers:/); // screening questions
   }
 });
@@ -192,7 +189,7 @@ test('with onProgress the proposal streams in, piece by piece', async () => {
   };
   const out = await generateProposal(JOB, 'KEY', { fetchImpl, onProgress: (t) => seen.push(t) });
   assert.match(calls[0], /:streamGenerateContent\?alt=sse$/);
-  assert.equal(out, 'Hello Sarah,\n\n𝐏𝐫𝐢𝐜𝐞: $𝟒𝟎');
+  assert.equal(out, 'Hello Sarah,\n\nPrice: $40');
   assert.equal(seen.at(-1), out);
   assert.ok(seen.includes('Hello Sarah,'));
 });

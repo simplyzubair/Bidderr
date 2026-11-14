@@ -73,37 +73,51 @@
 
   // Builds one profile's default prompt. Only the kind of work and the Offer Summary differ.
   function makePrompt({ work, offer, delivery }) {
-    const lines = [...offer, `**Delivery Time: ${delivery}**`, '**Price: $**'].map((l, i) => `${i + 1}. ${l}`);
+    const lines = [...offer, `Delivery Time: ${delivery}`, 'Price: $'].map((l, i) => `${i + 1}. ${l}`);
     return `You write Upwork / PeoplePerHour proposals for a freelancer named Khan, who does ${work}.
-Read the job posting and write a proposal with exactly these 5 sections, in this order.
+The proposal must be about the buyer and their problem, not about Khan. A buyer reads the first two
+lines of many proposals and opens only the ones that show their own job was really read.
 The text you get may include other things from the web page (menus, buttons, ads, other jobs, the client's
 history). Ignore all of that and use only the main job posting.
-Sections 2 and 4 are one short paragraph each, written like a real human: short sentences, easy English.
+Write like a real human: short sentences, very easy English, no sales words.
+Write exactly these 6 sections, in this order.
 
 SECTION 1 (greeting):
 "Hello (buyer name)," using the buyer's first name if it is visible in the posting.
 If the buyer's name is not visible, write just "Hello,".
 
-SECTION 2 (one paragraph):
-You are a professional freelancer with 10+ years of experience in this field.
-Address the buyer's pain points like an expert, in very easy language, and give a hint of the solution
-so the buyer knows they are in SAFE HANDS. Match the language of the job: if the posting is very technical,
-you may use their technical terms; if it is a simple post, explain the solution in simple words.
+SECTION 2 (the buyer's problem, 2 short sentences):
+Start with THEIR job, in their own words: the exact thing they have (for example the blurry logo, the
+sketch, the 12 badge designs) and what they need it for (print, a sign, embroidery on caps, a website).
+Then name the one thing that matters most for a good result on this job, the detail an expert would
+notice in their posting (for example small text that must stay readable, clean curves for cutting,
+exact colours, a deadline, matching an existing style).
+Never start with "I" or "My". Never open with Khan's experience, years, skills or a line like
+"I hope you are well". Do not repeat the posting back word for word.
 
-SECTION 3 (copy this list exactly, only fill in the price):
+SECTION 3 (how it gets solved, 2 or 3 short sentences):
+Say plainly what Khan will do for this exact job and what the buyer gets at the end, so they can
+picture the finished work. Use the details from the posting (their file type, size, use, number of items).
+If something in the posting is risky or unclear, say how it will be handled.
+Match the language of the job: technical terms only if the posting uses them.
+You may end with ONE short line of proof, such as "This is the work I do every day, for 10+ years."
+That is the only place where experience may be mentioned.
+
+SECTION 4 (copy this list exactly, only fill in the price):
 Offer Summary:
 ${lines.join('\n')}
 
-For the price line: if the posting clearly states a fixed budget, write it after the $ (for example "**Price: $50**").
-Otherwise leave it exactly as "**Price: $**" so Khan can fill it in.
+For the price line: if the posting states a fixed budget, write that amount with its own currency
+sign in place of the $ (for example "Price: £50" or "Price: $50"). Never change the currency or the number.
+Otherwise leave it exactly as "Price: $" so Khan can fill it in.
 
-SECTION 4 (optional, one line or a very short paragraph):
-Use this to win the job. Give an assurance or a one-liner that makes the buyer choose Khan.
-If the buyer showed a lot of concern about the result or their expectations, say in one line that it will be handled.
-If their main pain point is fast delivery, say Khan respects deadlines and they will get results on time.
-Be creative. If the job is very general, skip this section completely.
+SECTION 5 (the close, one line):
+End with an easy next step that fits this job: a short, useful question about their file or their
+need, or an offer to start right away (for example "Send me the file and I can start today.").
+If the buyer is worried about quality or the deadline, promise that one thing in plain words instead.
+No begging, no "I look forward to hearing from you", no "kindly".
 
-SECTION 5 (sign-off, exactly):
+SECTION 6 (sign-off, exactly):
 Best,
 Khan
 
@@ -117,7 +131,8 @@ question on its own line followed by a short, honest answer. If you can't know t
 OUTPUT RULES:
 - Output only the proposal text, ready to paste. No section labels, no headings, no notes before or after.
 - Put one blank line between sections.
-- Do not use markdown except the ** around the two bold lines in the Offer Summary.
+- Plain text only: no markdown, no bold, no ** anywhere.
+- Sections 2, 3 and 5 together stay under 90 words. Short wins.
 - Do not use em dashes. Do not invent facts about the job that are not in the posting.`;
   }
 
@@ -178,26 +193,13 @@ OUTPUT RULES:
     return (PROFILES.find((p) => p.id === profileId) || PROFILES[0]).prompt;
   }
 
-  // Turns **text** into Unicode bold letters, so it stays bold when pasted into plain text boxes
-  // (Upwork and PeoplePerHour cover letters do not support formatting).
-  function toUnicodeBold(text) {
-    let out = '';
-    for (const ch of text) {
-      const c = ch.codePointAt(0);
-      if (c >= 65 && c <= 90) out += String.fromCodePoint(0x1d400 + c - 65); // A-Z
-      else if (c >= 97 && c <= 122) out += String.fromCodePoint(0x1d41a + c - 97); // a-z
-      else if (c >= 48 && c <= 57) out += String.fromCodePoint(0x1d7ce + c - 48); // 0-9
-      else out += ch;
-    }
-    return out;
-  }
-
+  // Proposals are plain text (PPH and Upwork boxes have no formatting), so ** marks are removed.
   function formatProposal(raw) {
     return String(raw || '')
       .replace(/\r\n/g, '\n')
       .replace(/^```[a-z]*\n?|```$/gim, '')
       .replace(/^#+\s*/gm, '')
-      .replace(/\*\*([^*\n]+?)\*\*/g, (_, inner) => toUnicodeBold(inner))
+      .replace(/\*\*([^*\n]+?)\*\*/g, '$1')
       .replace(/\s*—\s*/g, ', ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
@@ -512,7 +514,7 @@ OUTPUT RULES:
 
   return {
     MODELS, PROFILES, DEFAULT_PROFILE, DEFAULT_PROMPT, OPENROUTER_MODEL, GROQ_MODELS, backupName, defaultPromptFor,
-    toUnicodeBold, formatProposal, generateProposal, checkApiKey, checkBackupKey, maskKey, addToHistory,
+    formatProposal, generateProposal, checkApiKey, checkBackupKey, maskKey, addToHistory,
     forgetFailedModels,
   };
 });
